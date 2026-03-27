@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11620.152 stable
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PipeBendingDashboard", "PipeBendingDashboard.csproj", "{A88BEE0D-875B-C617-DAFF-2A25CB000E01}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A88BEE0D-875B-C617-DAFF-2A25CB000E01}.Debug|x64.ActiveCfg = Debug|x64
+		{A88BEE0D-875B-C617-DAFF-2A25CB000E01}.Debug|x64.Build.0 = Debug|x64
+		{A88BEE0D-875B-C617-DAFF-2A25CB000E01}.Release|x64.ActiveCfg = Release|x64
+		{A88BEE0D-875B-C617-DAFF-2A25CB000E01}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7AA72F2B-BBEA-477B-8C35-C6252132D92F}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,6 @@
+Applied only the requested visible changes and caption rules.
+1) All CI assets used in login/sidebar/dashboard/worker/operation/splash were changed to white CI.
+2) Worker/Operation header icons were changed to CI.
+3) WPF splash top image changed to CI, company text changed to CI.
+4) Admin Dashboard -> borderless window.
+5) Worker/Operation -> standard caption retained, close button disabled/blocked.

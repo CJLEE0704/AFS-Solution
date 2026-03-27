@@ -1,0 +1,520 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace PipeBendingDashboard.Communication
+{
+    /// <summary>
+    /// 4개 머신 TCP/IP 통신 통합 관리
+    /// - 연결/해제/재연결
+    /// - 100ms 주기 상태 폴링
+    /// - 명령 전송 + ACK 응답 수신 (순서 보장)
+    /// - 설정 파일 영구 저장 (machine_settings.json)
+    /// </summary>
+    public class CommunicationManager : IDisposable
+    {
+        // ── 설정 파일 경로 ─────────────────────────────────────────
+        private static readonly string _settingsFile =
+            Path.Combine(AppContext.BaseDirectory, "machine_settings.json");
+
+        // ── 4개 머신 클라이언트 ──────────────────────────────────
+        private TcpMachineClient _loaderClient;
+        private TcpMachineClient _cuttingClient;
+        private TcpMachineClient _laserClient;
+        private TcpMachineClient _bendingClient;
+
+        // ── 상태 데이터 ──────────────────────────────────────────
+        private readonly AllMachineStatus _status = new();
+
+        // ── 폴링 타이머 ──────────────────────────────────────────
+        private Timer?       _pollTimer;
+        private bool         _isPolling = false;
+        private readonly int _pollIntervalMs;
+
+        // ── 명령 ACK 직렬화 잠금 (동시 명령 방지) ───────────────
+        private readonly SemaphoreSlim _cmdLock = new(1, 1);
+
+        // ── 이벤트 ───────────────────────────────────────────────
+        public event Action<string>?                     StatusUpdated;  // JSON
+        public event Action<string, string>?             LogAdded;       // (machineId, msg)
+        public event Action<string, string, string>?     CommandAck;     // (machineId, cmdType, response)
+        /// <summary>Ready 확인 결과 이벤트 (machineId, isReady, response)</summary>
+        public event Action<string, bool, string>?       ReadyChecked;
+
+        // ══════════════════════════════════════════════════════════
+        // 생성자 — 설정 파일에서 IP/Port 로드
+        // ══════════════════════════════════════════════════════════
+        public CommunicationManager(
+            string loaderIp  = "192.168.1.10", int loaderPort  = 5000,
+            string cuttingIp = "192.168.1.11", int cuttingPort = 5000,
+            string laserIp   = "192.168.1.12", int laserPort   = 5000,
+            string bendingIp = "192.168.1.13", int bendingPort = 5000,
+            int    pollIntervalMs = 100)
+        {
+            _pollIntervalMs = pollIntervalMs;
+
+            // ── 저장 파일 우선 적용 (파일 없으면 파라미터 기본값 사용) ──
+            var saved = LoadSettingsFromFile();
+            loaderIp   = GetSaved(saved, "LOADER",  "ip",   loaderIp);
+            loaderPort = GetSavedInt(saved, "LOADER",  "port", loaderPort);
+            cuttingIp  = GetSaved(saved, "CUTTING", "ip",   cuttingIp);
+            cuttingPort= GetSavedInt(saved, "CUTTING", "port", cuttingPort);
+            laserIp    = GetSaved(saved, "LASER",   "ip",   laserIp);
+            laserPort  = GetSavedInt(saved, "LASER",   "port", laserPort);
+            bendingIp  = GetSaved(saved, "BENDING", "ip",   bendingIp);
+            bendingPort= GetSavedInt(saved, "BENDING", "port", bendingPort);
+
+            _loaderClient  = new TcpMachineClient("LOADER",  loaderIp,  loaderPort);
+            _cuttingClient = new TcpMachineClient("CUTTING", cuttingIp, cuttingPort);
+            _laserClient   = new TcpMachineClient("LASER",   laserIp,   laserPort);
+            _bendingClient = new TcpMachineClient("BENDING", bendingIp, bendingPort);
+
+            _status.Loader.IpAddress  = loaderIp;  _status.Loader.Port  = loaderPort;
+            _status.Cutting.IpAddress = cuttingIp; _status.Cutting.Port = cuttingPort;
+            _status.Laser.IpAddress   = laserIp;   _status.Laser.Port   = laserPort;
+            _status.Bending.IpAddress = bendingIp; _status.Bending.Port = bendingPort;
+
+            SubscribeClientEvents(_loaderClient);
+            SubscribeClientEvents(_cuttingClient);
+            SubscribeClientEvents(_laserClient);
+            SubscribeClientEvents(_bendingClient);
+        }
+
+        private void SubscribeClientEvents(TcpMachineClient c)
+        {
+            c.ConnectionChanged += OnConnectionChanged;
+            c.LogReceived       += (id, msg) => LogAdded?.Invoke(id, msg);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 설정 파일 저장 / 로드
+        // ══════════════════════════════════════════════════════════
+
+        private void SaveSettingsToFile()
+        {
+            try
+            {
+                var data = new[]
+                {
+                    new { id = "LOADER",  ip = _status.Loader.IpAddress,  port = _status.Loader.Port },
+                    new { id = "CUTTING", ip = _status.Cutting.IpAddress, port = _status.Cutting.Port },
+                    new { id = "LASER",   ip = _status.Laser.IpAddress,   port = _status.Laser.Port },
+                    new { id = "BENDING", ip = _status.Bending.IpAddress, port = _status.Bending.Port },
+                };
+                var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(_settingsFile, json);
+                System.Diagnostics.Debug.WriteLine($"[설정저장] {_settingsFile}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[설정저장실패] {ex.Message}");
+            }
+        }
+
+        private static List<Dictionary<string, JsonElement>>? LoadSettingsFromFile()
+        {
+            try
+            {
+                if (!File.Exists(_settingsFile)) return null;
+                var json = File.ReadAllText(_settingsFile);
+                return JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
+            }
+            catch { return null; }
+        }
+
+        private static string GetSaved(
+            List<Dictionary<string, JsonElement>>? list,
+            string machineId, string key, string def)
+        {
+            if (list == null) return def;
+            foreach (var d in list)
+            {
+                if (d.TryGetValue("id", out var idEl) &&
+                    idEl.GetString()?.Equals(machineId, StringComparison.OrdinalIgnoreCase) == true &&
+                    d.TryGetValue(key, out var v))
+                    return v.GetString() ?? def;
+            }
+            return def;
+        }
+
+        private static int GetSavedInt(
+            List<Dictionary<string, JsonElement>>? list,
+            string machineId, string key, int def)
+        {
+            if (list == null) return def;
+            foreach (var d in list)
+            {
+                if (d.TryGetValue("id", out var idEl) &&
+                    idEl.GetString()?.Equals(machineId, StringComparison.OrdinalIgnoreCase) == true &&
+                    d.TryGetValue(key, out var v))
+                    return v.TryGetInt32(out var n) ? n : def;
+            }
+            return def;
+        }
+
+        // ── 현재 설정 JSON 반환 (HTML 초기화 시 동기화용) ────────
+        public string GetCurrentSettingsJson()
+        {
+            var list = new[]
+            {
+                new { id = "LOADER",  ip = _status.Loader.IpAddress,  port = _status.Loader.Port },
+                new { id = "CUTTING", ip = _status.Cutting.IpAddress, port = _status.Cutting.Port },
+                new { id = "LASER",   ip = _status.Laser.IpAddress,   port = _status.Laser.Port },
+                new { id = "BENDING", ip = _status.Bending.IpAddress, port = _status.Bending.Port },
+            };
+            return JsonSerializer.Serialize(list,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 연결
+        // ══════════════════════════════════════════════════════════
+
+        // ── 활성 머신 목록 (JS 구성에서 수신) ───────────────────
+        private HashSet<string> _activeMachineIds = new() { "LOADER", "CUTTING", "LASER", "BENDING" };
+
+        /// <summary>
+        /// JS에서 선택된 구성의 활성 머신 목록을 설정
+        /// 비활성 머신은 연결하지 않고 즉시 연결 해제
+        /// </summary>
+        public void SetActiveMachines(IEnumerable<string> machineIds)
+        {
+            var newActive = new HashSet<string>(machineIds.Select(s => s.ToUpper()));
+            _activeMachineIds = newActive;
+
+            // 비활성화된 머신 즉시 연결 해제
+            foreach (var id in new[] { "LOADER", "CUTTING", "LASER", "BENDING" })
+            {
+                if (!_activeMachineIds.Contains(id))
+                {
+                    var client = GetClient(id);
+                    client?.Disconnect();
+                    var status = GetStatus(id);
+                    if (status != null)
+                    {
+                        status.IsConnected = false;
+                        status.IsReady     = false;
+                        status.Status      = "IDLE";
+                        status.LastMessage = "비활성 머신 (구성에서 제외됨)";
+                    }
+                }
+            }
+            NotifyStatusUpdate();
+        }
+
+        public async Task ConnectAllAsync()
+        {
+            // 활성 머신만 연결 시도
+            var tasks = new List<Task>();
+            if (_activeMachineIds.Contains("LOADER"))  tasks.Add(ConnectOneAsync(_loaderClient,  _status.Loader));
+            if (_activeMachineIds.Contains("CUTTING")) tasks.Add(ConnectOneAsync(_cuttingClient, _status.Cutting));
+            if (_activeMachineIds.Contains("LASER"))   tasks.Add(ConnectOneAsync(_laserClient,   _status.Laser));
+            if (_activeMachineIds.Contains("BENDING")) tasks.Add(ConnectOneAsync(_bendingClient, _status.Bending));
+
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
+            NotifyStatusUpdate();
+        }
+
+        private async Task ConnectOneAsync(TcpMachineClient client, MachineStatus status)
+        {
+            status.IsConnected = await client.ConnectAsync();
+            if (status.IsConnected)
+            {
+                status.Status      = "IDLE";
+                status.LastMessage = "연결 성공 — Ready 확인 중...";
+                // 연결 성공 시 Ready 명령 전송
+                await CheckReadyAsync(client, status);
+            }
+            else
+            {
+                status.Status      = "ERROR";
+                status.LastMessage = "연결 실패";
+                status.IsReady     = false;
+            }
+        }
+
+        /// <summary>
+        /// TCP 연결 성공 후 장비 Ready 상태 확인
+        /// 응답: "OK" → Ready / 그 외 → Not Ready
+        /// </summary>
+        private async Task CheckReadyAsync(TcpMachineClient client, MachineStatus status)
+        {
+            try
+            {
+                var readyCmd = MachineProtocol.GetReady(status.MachineId);
+                if (readyCmd == null) return;
+
+                System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 확인 전송: {readyCmd.Trim()}");
+
+                var response = await client.SendReceiveStringAsync(readyCmd);
+                var resp = response?.Trim() ?? "";
+
+                bool isReady = resp.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
+                status.IsReady     = isReady;
+                status.LastMessage = isReady ? "Ready — 명령 대기 중" : $"Not Ready: {resp}";
+
+                System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 응답: {resp} → {(isReady ? "OK" : "NG")}");
+
+                // HTML에 Ready 결과 전달 (이벤트 발생)
+                ReadyChecked?.Invoke(status.MachineId, isReady, resp);
+            }
+            catch (Exception ex)
+            {
+                status.IsReady     = false;
+                status.LastMessage = $"Ready 확인 실패: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 실패: {ex.Message}");
+                ReadyChecked?.Invoke(status.MachineId, false, ex.Message);
+            }
+        }
+
+        public void DisconnectAll()
+        {
+            StopPolling();
+            _loaderClient.Disconnect();
+            _cuttingClient.Disconnect();
+            _laserClient.Disconnect();
+            _bendingClient.Disconnect();
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 폴링
+        // ══════════════════════════════════════════════════════════
+
+        public void StartPolling()
+        {
+            if (_isPolling) return;
+            _isPolling = true;
+            _pollTimer = new Timer(async _ => await PollAllAsync(), null, 0, _pollIntervalMs);
+        }
+
+        public void StopPolling()
+        {
+            _isPolling = false;
+            _pollTimer?.Dispose();
+            _pollTimer = null;
+        }
+
+        private async Task PollAllAsync()
+        {
+            // 명령 처리 중이면 폴링 스킵 (간섭 방지)
+            if (_cmdLock.CurrentCount == 0) return;
+
+            // 활성 머신만 폴링
+            var tasks = new List<Task>();
+            if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  MachineProtocol.Loader.Status));
+            if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, MachineProtocol.Cutting.Status));
+            if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   MachineProtocol.Laser.Status));
+            if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, MachineProtocol.Bending.Status));
+
+            if (tasks.Count > 0) await Task.WhenAll(tasks);
+            NotifyStatusUpdate();
+        }
+
+        private async Task PollOneAsync(TcpMachineClient client, MachineStatus status, string command)
+        {
+            if (!client.IsConnected) { status.IsConnected = false; status.Status = "ERROR"; return; }
+            try
+            {
+                var response = await client.SendReceiveStringAsync(command);
+                if (response == null)
+                {
+                    status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = "응답 없음";
+                    return;
+                }
+                status.IsConnected  = true;
+                status.LastMessage  = response.Trim();
+                status.Status       = response.Contains("RUNNING") ? "RUNNING"
+                                    : response.Contains("ALARM")   ? "ALARM"
+                                    : response.Contains("ERROR")   ? "ERROR"
+                                    : "IDLE";
+                status.HasAlarm     = response.Contains("ALARM:1");
+                if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
+                if (TryParseValue(response, "OEE:",   out double oee)) status.Oee   = oee;
+            }
+            catch (Exception ex)
+            {
+                status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = ex.Message;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 런타임 IP/Port 변경 → 파일 저장 → 재연결
+        // ══════════════════════════════════════════════════════════
+        public async Task UpdateMachineSettingsAsync(string machineId, string newIp, int newPort)
+        {
+            var oldClient = GetClient(machineId);
+            if (oldClient == null) return;
+            oldClient.Disconnect();
+
+            var newClient = new TcpMachineClient(machineId, newIp, newPort);
+            SubscribeClientEvents(newClient);
+
+            switch (machineId.ToUpper())
+            {
+                case "LOADER":  _loaderClient  = newClient; break;
+                case "CUTTING": _cuttingClient = newClient; break;
+                case "LASER":   _laserClient   = newClient; break;
+                case "BENDING": _bendingClient = newClient; break;
+                default: return;
+            }
+
+            var status = GetStatus(machineId);
+            if (status != null) { status.IpAddress = newIp; status.Port = newPort; }
+
+            // ── 설정 파일 영구 저장 ──────────────────────────────
+            SaveSettingsToFile();
+
+            await ConnectOneAsync(GetClient(machineId)!, status ?? new MachineStatus());
+            NotifyStatusUpdate();
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // HTML → C# 명령 처리 (ACK 응답 수신 후 HTML로 전달)
+        // ══════════════════════════════════════════════════════════
+        public async Task HandleWebCommandAsync(WebCommand cmd)
+        {
+            var protocol = (cmd.Type.ToUpper(), cmd.Target.ToUpper()) switch
+            {
+                ("START",  "LOADER")  => MachineProtocol.Loader.Start,
+                ("STOP",   "LOADER")  => MachineProtocol.Loader.Stop,
+                ("RESET",  "LOADER")  => MachineProtocol.Loader.Reset,
+                ("STATUS", "LOADER")  => MachineProtocol.Loader.Status,
+                ("START",  "CUTTING") => MachineProtocol.Cutting.Start,
+                ("STOP",   "CUTTING") => MachineProtocol.Cutting.Stop,
+                ("RESET",  "CUTTING") => MachineProtocol.Cutting.Reset,
+                ("STATUS", "CUTTING") => MachineProtocol.Cutting.Status,
+                ("START",  "LASER")   => MachineProtocol.Laser.Start,
+                ("STOP",   "LASER")   => MachineProtocol.Laser.Stop,
+                ("RESET",  "LASER")   => MachineProtocol.Laser.Reset,
+                ("STATUS", "LASER")   => MachineProtocol.Laser.Status,
+                ("START",  "BENDING") => MachineProtocol.Bending.Start,
+                ("STOP",   "BENDING") => MachineProtocol.Bending.Stop,
+                ("RESET",  "BENDING") => MachineProtocol.Bending.Reset,
+                ("STATUS", "BENDING") => MachineProtocol.Bending.Status,
+                _ => null
+            };
+
+            if (protocol == null) return;
+
+            // ── 직렬화: 이전 명령 완료 후 다음 명령 처리 ──────────
+            if (!await _cmdLock.WaitAsync(5000))
+            {
+                var timeoutMsg = "이전 명령 대기 중 — 타임아웃";
+                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ {timeoutMsg}");
+                CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:TIMEOUT");
+                return;
+            }
+
+            try
+            {
+                var client = GetClient(cmd.Target);
+                if (client == null || !client.IsConnected)
+                {
+                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 연결되지 않음");
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NOT_CONNECTED");
+                    return;
+                }
+
+                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] → 전송: {cmd.Type} ({protocol.Trim()})");
+
+                // ── 명령 전송 + 장비 ACK 응답 수신 ─────────────────
+                var response = await client.SendReceiveStringAsync(protocol);
+
+                if (string.IsNullOrWhiteSpace(response))
+                {
+                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ ACK 없음 (응답 타임아웃)");
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NO_ACK");
+                    return;
+                }
+
+                var ack = response.Trim();
+                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ← ACK: {ack}");
+
+                // ── 상태 즉시 갱신 ───────────────────────────────────
+                var status = GetStatus(cmd.Target);
+                if (status != null)
+                {
+                    status.LastMessage = ack;
+                    bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
+                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUNNING";
+                    else if (cmd.Type.ToUpper() == "STOP"  && isOk)  status.Status = "IDLE";
+                    else if (cmd.Type.ToUpper() == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
+                    if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
+                }
+
+                // ── HTML에 ACK 결과 전달 → 다음 명령 허용 ──────────
+                CommandAck?.Invoke(cmd.Target, cmd.Type, ack);
+                NotifyStatusUpdate();
+            }
+            finally
+            {
+                _cmdLock.Release();
+            }
+        }
+
+        // ── 연결 상태 변경 콜백 ──────────────────────────────────
+        private void OnConnectionChanged(string machineId, bool isConnected)
+        {
+            var status = GetStatus(machineId);
+            if (status == null) return;
+            status.IsConnected = isConnected;
+            status.Status      = isConnected ? "IDLE" : "ERROR";
+            NotifyStatusUpdate();
+        }
+
+        private void NotifyStatusUpdate()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_status,
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                StatusUpdated?.Invoke(json);
+            }
+            catch { }
+        }
+
+        private TcpMachineClient? GetClient(string machineId) =>
+            machineId.ToUpper() switch
+            {
+                "LOADER"  => _loaderClient,
+                "CUTTING" => _cuttingClient,
+                "LASER"   => _laserClient,
+                "BENDING" => _bendingClient,
+                _ => null
+            };
+
+        private MachineStatus? GetStatus(string machineId) =>
+            machineId.ToUpper() switch
+            {
+                "LOADER"  => _status.Loader,
+                "CUTTING" => _status.Cutting,
+                "LASER"   => _status.Laser,
+                "BENDING" => _status.Bending,
+                _ => null
+            };
+
+        private static bool TryParseValue(string response, string key, out double value)
+        {
+            value = 0;
+            int idx = response.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return false;
+            var rest = response[(idx + key.Length)..];
+            var end  = rest.IndexOfAny(new[] { ',', '\r', '\n', ' ' });
+            var num  = end < 0 ? rest : rest[..end];
+            return double.TryParse(num, out value);
+        }
+
+        public void Dispose()
+        {
+            _cmdLock.Dispose();
+            StopPolling();
+            _loaderClient.Dispose();
+            _cuttingClient.Dispose();
+            _laserClient.Dispose();
+            _bendingClient.Dispose();
+        }
+    }
+}

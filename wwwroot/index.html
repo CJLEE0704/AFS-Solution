@@ -2534,7 +2534,7 @@ const MSVG={
   2:a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#140c04" stroke="#D39D63" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="780" y="30" width="300" height="280" rx="10" fill="#D39D63" fill-opacity="${a?.07:0}"/><rect x="808" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="896" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="984" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><polygon points="837,148 851,175 823,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" repeatCount="indefinite"/>`:''}</polygon><polygon points="925,148 939,175 911,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".12s" repeatCount="indefinite"/>`:''}</polygon><polygon points="1013,148 1027,175 999,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".24s" repeatCount="indefinite"/>`:''}</polygon><text x="930" y="265" text-anchor="middle" fill="#D39D63" font-size="32" font-weight="800" opacity="${a?1:.5}">Laser Marking</text>${a?`${mkGlow(780,30,300,280,10,'#D39D63')}${mkScan(781,31,298,278,'#D39D63')}${mkBadge(786,35,'#522c0a')}`:''} `,
   1:a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `,
 };
-MSVG[6]=a=>MSVG[1](a).replace('Bending M/C</text>','Bending M/C #2</text>');
+MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
 MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
 <rect x="20" y="30" width="320" height="220" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
 <rect x="60" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
@@ -3095,7 +3095,55 @@ function applyConfigToOperation(){
   const cfgFlow=document.getElementById('opCfgFlow');
   if(cfgDot) cfgDot.style.background=cfg.col;
   if(cfgLbl){cfgLbl.textContent=cfg.badge;cfgLbl.style.color=cfg.col;}
-  if(cfgFlow) cfgFlow.textContent=steps.map(s=>STEP_LABEL[s]).join(' → ');
+  if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
+
+  applyConfigToWorkerLayout(active);
+}
+
+function applyConfigToWorkerLayout(active){
+  const wMap={4:'wMach4',3:'wMach3',2:'wMach2',5:'wMach5',1:'wMach1',6:'wMach6'};
+  Object.entries(wMap).forEach(([id, wid])=>{
+    const el=document.getElementById(wid); if(!el) return;
+    el.style.display = active.includes(Number(id)) ? 'block' : 'none';
+    el.style.flex = '1';
+  });
+
+  const wB1=document.getElementById('wMach1');
+  const wB2=document.getElementById('wMach6');
+  const hasB1=active.includes(1);
+  const hasB2=active.includes(6);
+  if(wB1 && wB2){
+    if(hasB1 && hasB2){
+      wB1.style.display='block';
+      wB2.style.display='block';
+      wB1.style.flex='1';
+      wB2.style.flex='1';
+      wB1.style.minHeight='0';
+      wB2.style.minHeight='0';
+    }else if(hasB1 && !hasB2){
+      wB1.style.display='block';
+      wB2.style.display='none';
+      wB1.style.flex='1.8';
+      wB1.style.minHeight='120px';
+    }else if(!hasB1 && hasB2){
+      wB1.style.display='none';
+      wB2.style.display='block';
+      wB2.style.flex='1.8';
+      wB2.style.minHeight='120px';
+    }
+  }
+
+  const opB1=document.getElementById('opMachWrap1');
+  const opB2=document.getElementById('opMachWrap6');
+  if(opB1) opB1.style.gridColumn='span 1';
+  if(opB2) opB2.style.gridColumn='span 1';
+  if(opB1 && opB2){
+    if(hasB1 && !hasB2){
+      opB1.style.gridColumn='span 2';
+    }else if(!hasB1 && hasB2){
+      opB2.style.gridColumn='span 2';
+    }
+  }
 }
 
 const STEP_LABEL={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};

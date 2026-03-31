@@ -3394,6 +3394,9 @@ let _stepStartTime   = 0;  // 각 머신 스텝 시작 시간
 let loaderBufferCount = 0; // Loader 사전 준비 버퍼(인라인 공급)
 let loaderPrefetchTimer = null;
 const LOADER_BUFFER_MAX = 2;
+let pipelineTimer = null;
+let stageSlots = {};      // { stepId: {pipeIdx, remain} | null }
+let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
 
 // 머신 번호 → ID 매핑
 const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
@@ -3423,6 +3426,114 @@ function scheduleLoaderPrefetch(){
       scheduleLoaderPrefetch();
     }
   }, Math.max(1200, Math.floor((STEP_DUR[4]||2200) * 0.75)));
+}
+
+function initPipelineSlots(){
+  stageSlots = {};
+  const active = getActiveSteps();
+  active.forEach(s=>stageSlots[s]=null);
+}
+
+function stageName(s){ return STEP_LABEL[s] || String(s); }
+
+function chooseReadyBending(active){
+  const cands = active.filter(s=>s===1 || s===6);
+  if(cands.length===0) return null;
+  // 빈 슬롯 우선
+  const idle = cands.filter(s=>!stageSlots[s]);
+  if(idle.length===1) return idle[0];
+  if(idle.length===2){
+    // 교대 분배
+    return (cycleCount % 2 === 0) ? 1 : 6;
+  }
+  return null;
+}
+
+function updatePipelineVisual(){
+  const active = getActiveSteps();
+  const occupied = active.filter(s=>stageSlots[s]);
+  const lead = occupied.length ? occupied[occupied.length-1] : 0;
+  currentStep = lead || 0;
+  if(lead){
+    updateFlow(lead);
+    updateWorkerMachines(lead);
+    setDashStatus(true, `${stageName(lead)} 가동 중`, STEP_COL[lead] || 'var(--cyan)');
+    setOpStatus(true, '가동 중', STEP_COL[lead] || 'var(--cyan)');
+  }else{
+    updateFlowIdle();
+    updateWorkerMachines(0);
+    setDashStatus(false,'대기 중');
+    setOpStatus(false,'대기 중');
+  }
+}
+
+function runPipelineTick(){
+  if(!processRunning) return;
+  const active = getActiveSteps();
+  if(active.length===0) return;
+
+  // 1) 처리 시간 감소
+  active.forEach(s=>{
+    const slot = stageSlots[s];
+    if(slot) slot.remain -= 250;
+  });
+
+  // 2) 뒤에서 앞으로 이동 시도
+  for(let i=active.length-1;i>=0;i--){
+    const s = active[i];
+    const slot = stageSlots[s];
+    if(!slot || slot.remain > 0) continue;
+
+    // Bending 완료
+    if(s===1 || s===6){
+      cycleCount++;
+      const c=document.getElementById('opCycles'); if(c) c.textContent=cycleCount;
+      setOpLog(`✅ 배관 ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id} 완료 (${stageName(s)})`);
+      stageSlots[s]=null;
+      continue;
+    }
+
+    // Robot -> Bending 분기
+    if(s===5){
+      const target = chooseReadyBending(active);
+      if(target && !stageSlots[target]){
+        stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: STEP_DUR[target] || 6000 };
+        stageSlots[s] = null;
+        setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}`);
+      }
+      continue;
+    }
+
+    // 일반 다음 공정 이동
+    const next = active[i+1];
+    if(next && !stageSlots[next]){
+      stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: STEP_DUR[next] || 2200 };
+      stageSlots[s] = null;
+    }
+  }
+
+  // 3) Loader 투입 (지속 공급)
+  if(active.includes(4) && !stageSlots[4]){
+    stageSlots[4] = { pipeIdx: nextPipeFeedIdx, remain: STEP_DUR[4] || 2200 };
+    const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
+    setOpLog(`📥 Loader 투입: ${pid}`);
+    nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
+  }
+
+  updatePipelineVisual();
+}
+
+function startPipelineMode(startIdx){
+  nextPipeFeedIdx = startIdx || 0;
+  initPipelineSlots();
+  clearInterval(pipelineTimer);
+  pipelineTimer = setInterval(runPipelineTick, 250);
+}
+
+function stopPipelineMode(){
+  clearInterval(pipelineTimer);
+  pipelineTimer = null;
+  initPipelineSlots();
 }
 
 function runStep(n){
@@ -3583,6 +3694,7 @@ function handleStart(){
     syncRunningLock(false);
     stopLoaderPrefetch();
     loaderBufferCount = 0;
+    stopPipelineMode();
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -3603,8 +3715,7 @@ function handleStart(){
     setOpLog(`▶ [${cfg.title}] 라인 가동 — ${PIPE_DATA[opPipeIdx].id} 투입 시작`);
     loaderBufferCount = 0;
     stopLoaderPrefetch();
-    scheduleLoaderPrefetch();
-    runStep(steps[0]);
+    startPipelineMode(opPipeIdx);
   }
 }
 
@@ -3740,6 +3851,7 @@ function handleEmergency(){
   const ptg=document.getElementById('ptg');
   if(ptg){ptg.style.transition='opacity 0.5s';ptg.style.opacity='1';}
   updateWorkerMachines(0); syncWorkerBtn(false);
+  stopPipelineMode();
   syncRunningLock(false);  // ← 비상 정지 시 잠금 해제
 }
 

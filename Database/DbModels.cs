@@ -109,7 +109,7 @@ namespace PipeBendingDashboard.Database
         [Key][Column("log_id")]       public long     LogId        { get; set; }
         [Column("pipe_id")]           public string   PipeId       { get; set; } = "";
         [Column("project_id")]        public string   ProjectId    { get; set; } = "";
-        [Column("machine_id")]        public string   MachineId    { get; set; } = "";  // LOADER/CUTTING/LASER/BENDING
+        [Column("machine_id")]        public string   MachineId    { get; set; } = "";  // LOADER/CUTTING/LASER/ROBOT/BENDING/BENDING2
         [Column("machine_name")]      public string?  MachineName  { get; set; }
         [Column("config_id")]         public string?  ConfigId     { get; set; }
         [Column("operator_id")]       public string?  OperatorId   { get; set; }

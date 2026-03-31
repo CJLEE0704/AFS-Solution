@@ -1224,7 +1224,9 @@ body::before{
       <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px"></div>
+      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
+      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
     </div>
 
     <!-- COMM LOG + COMMAND PANEL -->
@@ -1248,7 +1250,9 @@ body::before{
             <option value="LOADER">Auto Loader</option>
             <option value="CUTTING">Cutting M/C</option>
             <option value="LASER">Laser Marking</option>
+            <option value="ROBOT">Moving Robot</option>
             <option value="BENDING">Bending M/C</option>
+            <option value="BENDING2">Bending M/C #2</option>
           </select>
         </div>
         <!-- 명령 선택 -->
@@ -3344,7 +3348,7 @@ let loaderPrefetchTimer = null;
 const LOADER_BUFFER_MAX = 2;
 
 // 머신 번호 → ID 매핑
-const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 1:'BENDING'};
+const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
 
 function stopLoaderPrefetch(){
   if(loaderPrefetchTimer){
@@ -3481,7 +3485,7 @@ function runStep(n){
       let oeeSnap = 0;
       try{
         const cfg2 = getActiveConfig();
-        const machIds = {1:'BENDING',2:'LASER',3:'CUTTING',4:'LOADER',6:'BENDING'};
+        const machIds = {1:'BENDING',2:'LASER',3:'CUTTING',4:'LOADER',5:'ROBOT',6:'BENDING2'};
         const oeeVals = cfg2.machines
           .map(mi=>machSt[machIds[mi]]?.oee||0)
           .filter(v=>v>0);
@@ -3574,7 +3578,8 @@ function _getDisconnectedMachines(){
 function _showCommErrorPopup(disconnectedIds){
   const mNames = {
     LOADER:'Auto Loader', CUTTING:'Cutting M/C',
-    LASER:'Laser Marking', BENDING:'Bending M/C'
+    LASER:'Laser Marking', ROBOT:'Moving Robot',
+    BENDING:'Bending M/C #1', BENDING2:'Bending M/C #2'
   };
   const machineList = disconnectedIds.map(id=>mNames[id]||id).join(', ');
 
@@ -4749,7 +4754,9 @@ const MACHINES_DEFAULT=[
   {id:'LOADER',  name:'Auto Loader',   col:'#69B8D6', proto:'TCP/IP', ip:'192.168.1.10', port:5000},
   {id:'CUTTING', name:'Cutting M/C',   col:'#73C59B', proto:'TCP/IP', ip:'192.168.1.11', port:5000},
   {id:'LASER',   name:'Laser Marking', col:'#D39D63', proto:'TCP/IP', ip:'192.168.1.12', port:5000},
+  {id:'ROBOT',   name:'Moving Robot',  col:'#63AEC9', proto:'TCP/IP', ip:'192.168.1.14', port:5000},
   {id:'BENDING', name:'Bending M/C',   col:'#9285D4', proto:'TCP/IP', ip:'192.168.1.13', port:5000},
+  {id:'BENDING2',name:'Bending M/C #2',col:'#9285D4', proto:'TCP/IP', ip:'192.168.1.15', port:5000},
 ];
 
 // MACHINES_DEFAULT의 딥카피 생성 (MACHINES_DEFAULT를 절대 건드리지 않음)
@@ -5216,7 +5223,7 @@ function renderAllCards(){MACHINES.forEach(m=>renderCard(m.id));}
 // Settings 구성 → Comm 화면 동기화
 // machines 숫자 매핑: 1=BENDING, 2=LASER, 3=CUTTING, 4=LOADER
 // ══════════════════════════════════════════════════════════════════
-const _CFG_NUM_TO_ID = {1:'BENDING', 2:'LASER', 3:'CUTTING', 4:'LOADER', 6:'BENDING'};
+const _CFG_NUM_TO_ID = {1:'BENDING', 2:'LASER', 3:'CUTTING', 4:'LOADER', 5:'ROBOT', 6:'BENDING2'};
 const _CFG_NUM_TO_NAME = {1:'Bending M/C', 2:'Marking M/C', 3:'Cutting M/C', 4:'Loader M/C', 5:'Moving Robot', 6:'Bending M/C #2'};
 
 function getActiveCommMachineIds(){
@@ -5233,12 +5240,12 @@ function applyConfigToComm(){
 function _applyConfigToCommNow(){
   const cfg     = getActiveConfig();
   const activeIds = cfg.machines.map(n=>_CFG_NUM_TO_ID[n]).filter(Boolean);
-  const allIds    = ['LOADER','CUTTING','LASER','BENDING'];
+  const allIds    = ['LOADER','CUTTING','LASER','ROBOT','BENDING','BENDING2'];
 
   const grid = document.getElementById('machineCards');
   if(grid){
-    // 항상 2×2 그리드 유지 (4개 카드 모두 표시)
-    grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    // 6개 카드 표시
+    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
   }
 
   // ── 각 카드: 활성/비활성 시각 처리 ──
@@ -5303,8 +5310,8 @@ function _applyConfigToCommNow(){
     const allOpt = document.createElement('option');
     allOpt.value = 'ALL'; allOpt.textContent = '전체 활성 머신 (ALL)';
     sel.appendChild(allOpt);
-    // LOADER→CUTTING→LASER→BENDING 고정 순서로
-    ['LOADER','CUTTING','LASER','BENDING'].forEach(id => {
+    // LOADER→CUTTING→LASER→ROBOT→BENDING→BENDING2 고정 순서
+    ['LOADER','CUTTING','LASER','ROBOT','BENDING','BENDING2'].forEach(id => {
       if(!activeIds.includes(id)) return;
       const m = MACHINES.find(x=>x.id===id); if(!m) return;
       const opt = document.createElement('option');
@@ -6086,9 +6093,9 @@ window.onCSharpMessage = function(msg){
     if(msg.type === 'machineStatus' && msg.data){
       const d = msg.data;
       const _activeMids = getActiveCommMachineIds();
-      ['loader','cutting','laser','bending'].forEach(key=>{
+      ['loader','cutting','laser','robot','bending','bending2'].forEach(key=>{
         const m = d[key]; if(!m) return;
-        const mid = {loader:'LOADER',cutting:'CUTTING',laser:'LASER',bending:'BENDING'}[key];
+        const mid = {loader:'LOADER',cutting:'CUTTING',laser:'LASER',robot:'ROBOT',bending:'BENDING',bending2:'BENDING2'}[key];
         const st  = machSt[mid]; if(!st) return;
         if(!_activeMids.includes(mid)) return;
 

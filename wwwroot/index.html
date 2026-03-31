@@ -3339,9 +3339,39 @@ function updateViewersForPipe(idx){
 // ── 사이클 시작 시간 추적 ───────────────────────────────
 let _cycleStartTime  = 0;
 let _stepStartTime   = 0;  // 각 머신 스텝 시작 시간
+let loaderBufferCount = 0; // Loader 사전 준비 버퍼(인라인 공급)
+let loaderPrefetchTimer = null;
+const LOADER_BUFFER_MAX = 2;
 
 // 머신 번호 → ID 매핑
 const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 1:'BENDING'};
+
+function stopLoaderPrefetch(){
+  if(loaderPrefetchTimer){
+    clearTimeout(loaderPrefetchTimer);
+    loaderPrefetchTimer = null;
+  }
+}
+
+function scheduleLoaderPrefetch(){
+  if(!processRunning) return;
+  if(!getActiveSteps().includes(4)) return;
+  if(loaderBufferCount >= LOADER_BUFFER_MAX) return;
+  if(loaderPrefetchTimer) return;
+
+  // Loader는 다음 배관을 미리 집어서 Cutting 투입 대기 상태를 만든다.
+  loaderPrefetchTimer = setTimeout(()=>{
+    loaderPrefetchTimer = null;
+    if(!processRunning) return;
+    if(loaderBufferCount < LOADER_BUFFER_MAX){
+      loaderBufferCount++;
+      setOpLog(`↻ [Loader M/C] 다음 배관 사전 준비 완료 (버퍼 ${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
+    }
+    if(loaderBufferCount < LOADER_BUFFER_MAX){
+      scheduleLoaderPrefetch();
+    }
+  }, Math.max(1200, Math.floor((STEP_DUR[4]||2200) * 0.75)));
+}
 
 function runStep(n){
   if(!processRunning)return;
@@ -3375,7 +3405,11 @@ function runStep(n){
   }
 
   const targetX=PIPE_DWELL[n]!==undefined?PIPE_DWELL[n]:PIPE_DWELL.start;
-  const travelDur=1100;
+  const travelDur=(n===4 && loaderBufferCount>0) ? 450 : 1100;
+  if(n===4 && loaderBufferCount>0){
+    loaderBufferCount=Math.max(0, loaderBufferCount-1);
+    setOpLog(`▶ [Loader M/C] 사전 준비 배관 투입 중... (버퍼 ${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
+  }
 
   movePipeTo(targetX, travelDur, ()=>{
     if(!processRunning)return;
@@ -3418,6 +3452,10 @@ function runStep(n){
         setTimeout(()=>{if(processRunning)goNext();}, 300);
       });
     } else {
+      // Loader는 이송이 끝나면 즉시 다음 배관을 사전 준비한다(인라인 공급).
+      if(n===4){
+        scheduleLoaderPrefetch();
+      }
       const dwell=Math.max(400, STEP_DUR[n]-travelDur);
       cycleTimer=setTimeout(()=>{
         if(!processRunning)return;
@@ -3491,6 +3529,8 @@ function handleStart(){
     if(ptg){ptg.style.transition='opacity 0.5s';ptg.style.opacity='1';}
     updateWorkerMachines(0); syncWorkerBtn(false);
     syncRunningLock(false);
+    stopLoaderPrefetch();
+    loaderBufferCount = 0;
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -3509,6 +3549,9 @@ function handleStart(){
     const steps=getActiveSteps();
     const cfg=getActiveConfig();
     setOpLog(`▶ [${cfg.title}] 라인 가동 — ${PIPE_DATA[opPipeIdx].id} 투입 시작`);
+    loaderBufferCount = 0;
+    stopLoaderPrefetch();
+    scheduleLoaderPrefetch();
     runStep(steps[0]);
   }
 }

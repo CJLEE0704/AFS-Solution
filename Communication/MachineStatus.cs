@@ -8,7 +8,7 @@ namespace PipeBendingDashboard.Communication
         public string MachineId   { get; set; } = "";
         public string MachineName { get; set; } = "";
         public bool   IsConnected { get; set; } = false;
-        public string Status      { get; set; } = "IDLE";   // IDLE / RUNNING / ERROR / ALARM
+        public string Status      { get; set; } = "IDLE";   // IDLE / RUN / DOWN / ALARM / MANUAL
         public bool   HasAlarm    { get; set; } = false;
         public double Oee         { get; set; } = 0;
         public double Speed       { get; set; } = 0;
@@ -25,10 +25,12 @@ namespace PipeBendingDashboard.Communication
     /// </summary>
     public class AllMachineStatus
     {
-        public MachineStatus Loader  { get; set; } = new() { MachineId = "LOADER",  MachineName = "Auto Loader"   };
-        public MachineStatus Cutting { get; set; } = new() { MachineId = "CUTTING", MachineName = "Cutting M/C"   };
-        public MachineStatus Laser   { get; set; } = new() { MachineId = "LASER",   MachineName = "Laser Marking" };
-        public MachineStatus Bending { get; set; } = new() { MachineId = "BENDING", MachineName = "Bending M/C"   };
+        public MachineStatus Loader   { get; set; } = new() { MachineId = "LOADER",   MachineName = "Loader M/C"      };
+        public MachineStatus Cutting  { get; set; } = new() { MachineId = "CUTTING",  MachineName = "Cutting M/C"     };
+        public MachineStatus Laser    { get; set; } = new() { MachineId = "LASER",    MachineName = "Marking M/C"     };
+        public MachineStatus Robot    { get; set; } = new() { MachineId = "ROBOT",    MachineName = "Moving Robot"    };
+        public MachineStatus Bending  { get; set; } = new() { MachineId = "BENDING",  MachineName = "Bending M/C #1"  };
+        public MachineStatus Bending2 { get; set; } = new() { MachineId = "BENDING2", MachineName = "Bending M/C #2"  };
     }
 
     /// <summary>
@@ -38,7 +40,7 @@ namespace PipeBendingDashboard.Communication
     public class WebCommand
     {
         public string Type   { get; set; } = "";  // START / STOP / STATUS / RESET
-        public string Target { get; set; } = "";  // LOADER / CUTTING / LASER / BENDING
+        public string Target { get; set; } = "";  // LOADER / CUTTING / LASER / ROBOT / BENDING / BENDING2
         public string Data   { get; set; } = "";  // 추가 데이터 (옵션)
     }
 }

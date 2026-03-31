@@ -54,6 +54,26 @@ namespace PipeBendingDashboard.Communication
             public const string GetAngle = "BEND:ANGLE?\r\n";
         }
 
+        // ── Moving Robot (192.168.1.14) ──────────────────────────
+        public static class Robot
+        {
+            public const string Ready    = "ROBOT:READY?\r\n";
+            public const string Start    = "ROBOT:START\r\n";
+            public const string Stop     = "ROBOT:STOP\r\n";
+            public const string Status   = "ROBOT:STATUS?\r\n";
+            public const string Reset    = "ROBOT:RESET\r\n";
+        }
+
+        // ── Bending M/C #2 (192.168.1.15) ───────────────────────
+        public static class Bending2
+        {
+            public const string Ready    = "BEND2:READY?\r\n";
+            public const string Start    = "BEND2:START\r\n";
+            public const string Stop     = "BEND2:STOP\r\n";
+            public const string Status   = "BEND2:STATUS?\r\n";
+            public const string Reset    = "BEND2:RESET\r\n";
+        }
+
         /// <summary>
         /// 장비 ID로 Ready 명령어 반환
         /// </summary>
@@ -64,6 +84,8 @@ namespace PipeBendingDashboard.Communication
                 "CUTTING" => Cutting.Ready,
                 "LASER"   => Laser.Ready,
                 "BENDING" => Bending.Ready,
+                "ROBOT"   => Robot.Ready,
+                "BENDING2"=> Bending2.Ready,
                 _ => null
             };
     }

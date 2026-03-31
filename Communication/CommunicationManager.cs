@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace PipeBendingDashboard.Communication
 {
     /// <summary>
-    /// 4개 머신 TCP/IP 통신 통합 관리
+    /// 6개 머신 TCP/IP 통신 통합 관리
     /// - 연결/해제/재연결
     /// - 100ms 주기 상태 폴링
     /// - 명령 전송 + ACK 응답 수신 (순서 보장)
@@ -20,11 +20,13 @@ namespace PipeBendingDashboard.Communication
         private static readonly string _settingsFile =
             Path.Combine(AppContext.BaseDirectory, "machine_settings.json");
 
-        // ── 4개 머신 클라이언트 ──────────────────────────────────
+        // ── 6개 머신 클라이언트 ──────────────────────────────────
         private TcpMachineClient _loaderClient;
         private TcpMachineClient _cuttingClient;
         private TcpMachineClient _laserClient;
+        private TcpMachineClient _robotClient;
         private TcpMachineClient _bendingClient;
+        private TcpMachineClient _bending2Client;
 
         // ── 상태 데이터 ──────────────────────────────────────────
         private readonly AllMachineStatus _status = new();
@@ -51,7 +53,9 @@ namespace PipeBendingDashboard.Communication
             string loaderIp  = "192.168.1.10", int loaderPort  = 5000,
             string cuttingIp = "192.168.1.11", int cuttingPort = 5000,
             string laserIp   = "192.168.1.12", int laserPort   = 5000,
+            string robotIp   = "192.168.1.14", int robotPort   = 5000,
             string bendingIp = "192.168.1.13", int bendingPort = 5000,
+            string bending2Ip = "192.168.1.15", int bending2Port = 5000,
             int    pollIntervalMs = 100)
         {
             _pollIntervalMs = pollIntervalMs;
@@ -64,23 +68,33 @@ namespace PipeBendingDashboard.Communication
             cuttingPort= GetSavedInt(saved, "CUTTING", "port", cuttingPort);
             laserIp    = GetSaved(saved, "LASER",   "ip",   laserIp);
             laserPort  = GetSavedInt(saved, "LASER",   "port", laserPort);
+            robotIp    = GetSaved(saved, "ROBOT",   "ip",   robotIp);
+            robotPort  = GetSavedInt(saved, "ROBOT",   "port", robotPort);
             bendingIp  = GetSaved(saved, "BENDING", "ip",   bendingIp);
             bendingPort= GetSavedInt(saved, "BENDING", "port", bendingPort);
+            bending2Ip  = GetSaved(saved, "BENDING2", "ip",   bending2Ip);
+            bending2Port= GetSavedInt(saved, "BENDING2", "port", bending2Port);
 
             _loaderClient  = new TcpMachineClient("LOADER",  loaderIp,  loaderPort);
             _cuttingClient = new TcpMachineClient("CUTTING", cuttingIp, cuttingPort);
             _laserClient   = new TcpMachineClient("LASER",   laserIp,   laserPort);
+            _robotClient   = new TcpMachineClient("ROBOT",   robotIp,   robotPort);
             _bendingClient = new TcpMachineClient("BENDING", bendingIp, bendingPort);
+            _bending2Client = new TcpMachineClient("BENDING2", bending2Ip, bending2Port);
 
             _status.Loader.IpAddress  = loaderIp;  _status.Loader.Port  = loaderPort;
             _status.Cutting.IpAddress = cuttingIp; _status.Cutting.Port = cuttingPort;
             _status.Laser.IpAddress   = laserIp;   _status.Laser.Port   = laserPort;
+            _status.Robot.IpAddress   = robotIp;   _status.Robot.Port   = robotPort;
             _status.Bending.IpAddress = bendingIp; _status.Bending.Port = bendingPort;
+            _status.Bending2.IpAddress = bending2Ip; _status.Bending2.Port = bending2Port;
 
             SubscribeClientEvents(_loaderClient);
             SubscribeClientEvents(_cuttingClient);
             SubscribeClientEvents(_laserClient);
+            SubscribeClientEvents(_robotClient);
             SubscribeClientEvents(_bendingClient);
+            SubscribeClientEvents(_bending2Client);
         }
 
         private void SubscribeClientEvents(TcpMachineClient c)
@@ -102,7 +116,9 @@ namespace PipeBendingDashboard.Communication
                     new { id = "LOADER",  ip = _status.Loader.IpAddress,  port = _status.Loader.Port },
                     new { id = "CUTTING", ip = _status.Cutting.IpAddress, port = _status.Cutting.Port },
                     new { id = "LASER",   ip = _status.Laser.IpAddress,   port = _status.Laser.Port },
+                    new { id = "ROBOT",   ip = _status.Robot.IpAddress,   port = _status.Robot.Port },
                     new { id = "BENDING", ip = _status.Bending.IpAddress, port = _status.Bending.Port },
+                    new { id = "BENDING2", ip = _status.Bending2.IpAddress, port = _status.Bending2.Port },
                 };
                 var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_settingsFile, json);
@@ -163,7 +179,9 @@ namespace PipeBendingDashboard.Communication
                 new { id = "LOADER",  ip = _status.Loader.IpAddress,  port = _status.Loader.Port },
                 new { id = "CUTTING", ip = _status.Cutting.IpAddress, port = _status.Cutting.Port },
                 new { id = "LASER",   ip = _status.Laser.IpAddress,   port = _status.Laser.Port },
+                new { id = "ROBOT",   ip = _status.Robot.IpAddress,   port = _status.Robot.Port },
                 new { id = "BENDING", ip = _status.Bending.IpAddress, port = _status.Bending.Port },
+                new { id = "BENDING2", ip = _status.Bending2.IpAddress, port = _status.Bending2.Port },
             };
             return JsonSerializer.Serialize(list,
                 new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
@@ -174,7 +192,7 @@ namespace PipeBendingDashboard.Communication
         // ══════════════════════════════════════════════════════════
 
         // ── 활성 머신 목록 (JS 구성에서 수신) ───────────────────
-        private HashSet<string> _activeMachineIds = new() { "LOADER", "CUTTING", "LASER", "BENDING" };
+        private HashSet<string> _activeMachineIds = new() { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" };
 
         /// <summary>
         /// JS에서 선택된 구성의 활성 머신 목록을 설정
@@ -186,7 +204,7 @@ namespace PipeBendingDashboard.Communication
             _activeMachineIds = newActive;
 
             // 비활성화된 머신 즉시 연결 해제
-            foreach (var id in new[] { "LOADER", "CUTTING", "LASER", "BENDING" })
+            foreach (var id in new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" })
             {
                 if (!_activeMachineIds.Contains(id))
                 {
@@ -212,7 +230,9 @@ namespace PipeBendingDashboard.Communication
             if (_activeMachineIds.Contains("LOADER"))  tasks.Add(ConnectOneAsync(_loaderClient,  _status.Loader));
             if (_activeMachineIds.Contains("CUTTING")) tasks.Add(ConnectOneAsync(_cuttingClient, _status.Cutting));
             if (_activeMachineIds.Contains("LASER"))   tasks.Add(ConnectOneAsync(_laserClient,   _status.Laser));
+            if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(ConnectOneAsync(_robotClient,   _status.Robot));
             if (_activeMachineIds.Contains("BENDING")) tasks.Add(ConnectOneAsync(_bendingClient, _status.Bending));
+            if (_activeMachineIds.Contains("BENDING2")) tasks.Add(ConnectOneAsync(_bending2Client, _status.Bending2));
 
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             NotifyStatusUpdate();
@@ -230,7 +250,7 @@ namespace PipeBendingDashboard.Communication
             }
             else
             {
-                status.Status      = "ERROR";
+                status.Status      = "DOWN";
                 status.LastMessage = "연결 실패";
                 status.IsReady     = false;
             }
@@ -276,7 +296,9 @@ namespace PipeBendingDashboard.Communication
             _loaderClient.Disconnect();
             _cuttingClient.Disconnect();
             _laserClient.Disconnect();
+            _robotClient.Disconnect();
             _bendingClient.Disconnect();
+            _bending2Client.Disconnect();
         }
 
         // ══════════════════════════════════════════════════════════
@@ -307,7 +329,9 @@ namespace PipeBendingDashboard.Communication
             if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  MachineProtocol.Loader.Status));
             if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, MachineProtocol.Cutting.Status));
             if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   MachineProtocol.Laser.Status));
+            if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(PollOneAsync(_robotClient,   _status.Robot,   MachineProtocol.Robot.Status));
             if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, MachineProtocol.Bending.Status));
+            if (_activeMachineIds.Contains("BENDING2")) tasks.Add(PollOneAsync(_bending2Client, _status.Bending2, MachineProtocol.Bending2.Status));
 
             if (tasks.Count > 0) await Task.WhenAll(tasks);
             NotifyStatusUpdate();
@@ -315,20 +339,20 @@ namespace PipeBendingDashboard.Communication
 
         private async Task PollOneAsync(TcpMachineClient client, MachineStatus status, string command)
         {
-            if (!client.IsConnected) { status.IsConnected = false; status.Status = "ERROR"; return; }
+            if (!client.IsConnected) { status.IsConnected = false; status.Status = "DOWN"; return; }
             try
             {
                 var response = await client.SendReceiveStringAsync(command);
                 if (response == null)
                 {
-                    status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = "응답 없음";
+                    status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = "응답 없음";
                     return;
                 }
                 status.IsConnected  = true;
                 status.LastMessage  = response.Trim();
-                status.Status       = response.Contains("RUNNING") ? "RUNNING"
+                status.Status       = response.Contains("RUNNING") ? "RUN"
                                     : response.Contains("ALARM")   ? "ALARM"
-                                    : response.Contains("ERROR")   ? "ERROR"
+                                    : response.Contains("ERROR")   ? "DOWN"
                                     : "IDLE";
                 status.HasAlarm     = response.Contains("ALARM:1");
                 if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
@@ -336,7 +360,7 @@ namespace PipeBendingDashboard.Communication
             }
             catch (Exception ex)
             {
-                status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = ex.Message;
+                status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = ex.Message;
             }
         }
 
@@ -357,7 +381,9 @@ namespace PipeBendingDashboard.Communication
                 case "LOADER":  _loaderClient  = newClient; break;
                 case "CUTTING": _cuttingClient = newClient; break;
                 case "LASER":   _laserClient   = newClient; break;
+                case "ROBOT":   _robotClient   = newClient; break;
                 case "BENDING": _bendingClient = newClient; break;
+                case "BENDING2": _bending2Client = newClient; break;
                 default: return;
             }
 
@@ -390,10 +416,18 @@ namespace PipeBendingDashboard.Communication
                 ("STOP",   "LASER")   => MachineProtocol.Laser.Stop,
                 ("RESET",  "LASER")   => MachineProtocol.Laser.Reset,
                 ("STATUS", "LASER")   => MachineProtocol.Laser.Status,
+                ("START",  "ROBOT")   => MachineProtocol.Robot.Start,
+                ("STOP",   "ROBOT")   => MachineProtocol.Robot.Stop,
+                ("RESET",  "ROBOT")   => MachineProtocol.Robot.Reset,
+                ("STATUS", "ROBOT")   => MachineProtocol.Robot.Status,
                 ("START",  "BENDING") => MachineProtocol.Bending.Start,
                 ("STOP",   "BENDING") => MachineProtocol.Bending.Stop,
                 ("RESET",  "BENDING") => MachineProtocol.Bending.Reset,
                 ("STATUS", "BENDING") => MachineProtocol.Bending.Status,
+                ("START",  "BENDING2") => MachineProtocol.Bending2.Start,
+                ("STOP",   "BENDING2") => MachineProtocol.Bending2.Stop,
+                ("RESET",  "BENDING2") => MachineProtocol.Bending2.Reset,
+                ("STATUS", "BENDING2") => MachineProtocol.Bending2.Status,
                 _ => null
             };
 
@@ -439,7 +473,7 @@ namespace PipeBendingDashboard.Communication
                 {
                     status.LastMessage = ack;
                     bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUNNING";
+                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUN";
                     else if (cmd.Type.ToUpper() == "STOP"  && isOk)  status.Status = "IDLE";
                     else if (cmd.Type.ToUpper() == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
                     if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
@@ -461,7 +495,7 @@ namespace PipeBendingDashboard.Communication
             var status = GetStatus(machineId);
             if (status == null) return;
             status.IsConnected = isConnected;
-            status.Status      = isConnected ? "IDLE" : "ERROR";
+            status.Status      = isConnected ? "IDLE" : "DOWN";
             NotifyStatusUpdate();
         }
 
@@ -482,7 +516,9 @@ namespace PipeBendingDashboard.Communication
                 "LOADER"  => _loaderClient,
                 "CUTTING" => _cuttingClient,
                 "LASER"   => _laserClient,
+                "ROBOT"   => _robotClient,
                 "BENDING" => _bendingClient,
+                "BENDING2" => _bending2Client,
                 _ => null
             };
 
@@ -492,7 +528,9 @@ namespace PipeBendingDashboard.Communication
                 "LOADER"  => _status.Loader,
                 "CUTTING" => _status.Cutting,
                 "LASER"   => _status.Laser,
+                "ROBOT"   => _status.Robot,
                 "BENDING" => _status.Bending,
+                "BENDING2" => _status.Bending2,
                 _ => null
             };
 
@@ -514,7 +552,9 @@ namespace PipeBendingDashboard.Communication
             _loaderClient.Dispose();
             _cuttingClient.Dispose();
             _laserClient.Dispose();
+            _robotClient.Dispose();
             _bendingClient.Dispose();
+            _bending2Client.Dispose();
         }
     }
 }

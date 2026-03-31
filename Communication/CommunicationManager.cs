@@ -230,7 +230,7 @@ namespace PipeBendingDashboard.Communication
             }
             else
             {
-                status.Status      = "ERROR";
+                status.Status      = "DOWN";
                 status.LastMessage = "연결 실패";
                 status.IsReady     = false;
             }
@@ -315,20 +315,20 @@ namespace PipeBendingDashboard.Communication
 
         private async Task PollOneAsync(TcpMachineClient client, MachineStatus status, string command)
         {
-            if (!client.IsConnected) { status.IsConnected = false; status.Status = "ERROR"; return; }
+            if (!client.IsConnected) { status.IsConnected = false; status.Status = "DOWN"; return; }
             try
             {
                 var response = await client.SendReceiveStringAsync(command);
                 if (response == null)
                 {
-                    status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = "응답 없음";
+                    status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = "응답 없음";
                     return;
                 }
                 status.IsConnected  = true;
                 status.LastMessage  = response.Trim();
-                status.Status       = response.Contains("RUNNING") ? "RUNNING"
+                status.Status       = response.Contains("RUNNING") ? "RUN"
                                     : response.Contains("ALARM")   ? "ALARM"
-                                    : response.Contains("ERROR")   ? "ERROR"
+                                    : response.Contains("ERROR")   ? "DOWN"
                                     : "IDLE";
                 status.HasAlarm     = response.Contains("ALARM:1");
                 if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
@@ -336,7 +336,7 @@ namespace PipeBendingDashboard.Communication
             }
             catch (Exception ex)
             {
-                status.IsConnected = false; status.Status = "ERROR"; status.LastMessage = ex.Message;
+                status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = ex.Message;
             }
         }
 
@@ -439,7 +439,7 @@ namespace PipeBendingDashboard.Communication
                 {
                     status.LastMessage = ack;
                     bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUNNING";
+                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUN";
                     else if (cmd.Type.ToUpper() == "STOP"  && isOk)  status.Status = "IDLE";
                     else if (cmd.Type.ToUpper() == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
                     if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
@@ -461,7 +461,7 @@ namespace PipeBendingDashboard.Communication
             var status = GetStatus(machineId);
             if (status == null) return;
             status.IsConnected = isConnected;
-            status.Status      = isConnected ? "IDLE" : "ERROR";
+            status.Status      = isConnected ? "IDLE" : "DOWN";
             NotifyStatusUpdate();
         }
 

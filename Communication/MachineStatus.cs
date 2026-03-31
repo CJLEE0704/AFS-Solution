@@ -8,7 +8,7 @@ namespace PipeBendingDashboard.Communication
         public string MachineId   { get; set; } = "";
         public string MachineName { get; set; } = "";
         public bool   IsConnected { get; set; } = false;
-        public string Status      { get; set; } = "IDLE";   // IDLE / RUNNING / ERROR / ALARM
+        public string Status      { get; set; } = "IDLE";   // IDLE / RUN / DOWN / ALARM / MANUAL
         public bool   HasAlarm    { get; set; } = false;
         public double Oee         { get; set; } = 0;
         public double Speed       { get; set; } = 0;

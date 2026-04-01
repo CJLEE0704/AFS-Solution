@@ -965,7 +965,7 @@ body::before{
         <div class="proj-tree" id="projTree"></div>
       </div>
       <!-- RIGHT: 머신 그림(상단) + 3D 뷰어(하단) -->
-      <div class="op-right" style="display:flex;flex-direction:column;gap:6px">
+      <div class="op-right" style="display:flex;flex-direction:column;gap:6px;min-height:300px">
         <!-- 머신 가로 한 줄 (설정된 구성에 따라 동적 표시) -->
         <div id="opMachGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;flex-shrink:0;height:130px">
           <div id="opMachWrap4" style="background:#11202A;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
@@ -1002,7 +1002,7 @@ body::before{
           </div>
         </div>
         <!-- 3D 뷰어 -->
-        <div style="flex:1;display:flex;flex-direction:column;min-height:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:220px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;flex-shrink:0">
             <div>
               <div style="font-size:10.5px;font-weight:700;color:var(--bright)" id="opT3d">배관 3D 형상</div>
@@ -1344,7 +1344,7 @@ body::before{
     <div style="flex:1;display:grid;grid-template-columns:1fr 280px;gap:8px;min-height:0;overflow:hidden">
 
       <!-- LEFT: 배관 리스트 + 3D 뷰어 -->
-      <div style="display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden">
+      <div style="display:flex;flex-direction:column;gap:8px;min-height:300px;overflow:hidden">
         <!-- 배관 선택 리스트 -->
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px;flex-shrink:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -1354,7 +1354,7 @@ body::before{
           <div id="workerPipeList" style="display:flex;gap:5px;flex-wrap:wrap;max-height:80px;overflow-y:auto"></div>
         </div>
         <!-- 3D 뷰어 (크게) -->
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:9px;flex:1;display:flex;flex-direction:column;min-height:0">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:9px;flex:1;display:flex;flex-direction:column;min-height:220px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;flex-shrink:0">
             <div>
               <div style="font-size:11px;font-weight:700;color:var(--bright)" id="wT3d">배관 3D 형상</div>
@@ -1831,6 +1831,7 @@ function afterLoginWorker(){
     applyConfigToOperation();   // ← 처음부터 CFG에 맞게 표시
     applyConfigToDashboard();
     applyConfigToComm();
+    ensureOpPipeSelected();
     // C#에 활성 머신 전달
     setTimeout(_notifyCSharpActiveMachines, 1000);
   }));
@@ -1980,6 +1981,7 @@ function setMenu(id){
     requestAnimationFrame(()=>{
       renderProjTree();
       applyConfigToOperation();   // CFG에 맞게 표시 (내부에서 MSVG 렌더 처리)
+      ensureOpPipeSelected();
       // 가동 중이라면 현재 스텝 배관 애니메이션 복원
       if(processRunning){
         updateWorkerMachines(currentStep);
@@ -2012,7 +2014,10 @@ function setMenu(id){
   } else if(id==='worker'){
     // 작업자 전용 뷰
     document.getElementById('worker-page').classList.add('show');
-    requestAnimationFrame(()=>initWorkerPage());
+    requestAnimationFrame(()=>{
+      initWorkerPage();
+      ensureWorkerPipeSelected();
+    });
   } else {
     document.getElementById('other-page').classList.add('show');
     const m=menuItems.find(x=>x.id===id);
@@ -2185,6 +2190,14 @@ function initDragOn(containerId, svgId, sh, sz){
 // Render a 3D viewer into a container div
 // containerId: div with viewer3d class; uses unique SVG id
 function render3D(viewerId, titleId, subId, badgeId, pipe){
+  if(!pipe) return;
+  const viewerEl=document.getElementById(viewerId);
+  if(viewerEl){
+    const vw=viewerEl.clientWidth||0, vh=viewerEl.clientHeight||0;
+    if(vw===0 || vh===0){
+      console.warn(`[render3D] ${viewerId} size is 0 (${vw}x${vh})`);
+    }
+  }
   const nums=pipe.id.match(/\d+/g);
   const shIdx=nums?parseInt(nums[nums.length-1])%SHAPES.length:0;
   const sh=SHAPES[shIdx];
@@ -2195,7 +2208,7 @@ function render3D(viewerId, titleId, subId, badgeId, pipe){
   const clsMap={완료:'완료',미완료:'미완료',불량:'불량',Completed:'완료',Bending:'미완료',Queue:'미완료'};
   if(b) b.innerHTML=`<span class="bw bw-${clsMap[pipe.status]||'미완료'}">${stMap[pipe.status]||'작업중'}</span>`;
   const svgId=viewerId+'Svg';
-  const container=document.getElementById(viewerId); if(!container) return;
+  const container=viewerEl||document.getElementById(viewerId); if(!container) return;
   // 배관 크기에 따라 viewBox 자동 조정
   const maxPt = sh.pts.reduce((m,p)=>Math.max(m,...p.map(Math.abs)),0);
   const vbSize = Math.max(560, Math.ceil(maxPt * 90 + 320));
@@ -2737,7 +2750,10 @@ function setActiveProject(id){
   ['opSC','opSI','opSD','opST'].forEach((el,i)=>{const v=i===3?proj.pipes.length:[cnt['완료'],cnt['미완료'],cnt['불량']][i];const e=document.getElementById(el);if(e)e.textContent=v;});
   const sub=document.getElementById('opHdrSub');if(sub)sub.textContent=`${proj.name} · ${proj.pipes.length}개 배관`;
   renderProjTree();
-  if(proj.pipes.length)selOpPipe(proj.pipes[0]);
+  if(proj.pipes.length){
+    const safePipe=(opSel && proj.pipes.some(p=>p.id===opSel.id))?opSel:proj.pipes[0];
+    selOpPipe(safePipe);
+  }
 }
 // ── 체크박스 선택 상태 ──────────────────────────────────────────
 // key: "projId::pipeId"
@@ -3024,9 +3040,25 @@ function selOpPipe_byId(projId,pipeId){
   else selOpPipe(pipe);
 }
 function selOpPipe(pipe){
+  if(!pipe) return;
   opSel=pipe;
   renderProjTree();
   render3D('opViewer','opT3d','opS3d','opB3d',pipe);
+  if(!document.getElementById('opViewerSvg')){
+    console.warn('[Operation] opViewerSvg was not created after pipe selection:', pipe.id);
+  }
+}
+function ensureOpPipeSelected(){
+  const proj=projects.find(p=>p.id===activeProjectId) || projects[0];
+  if(!proj || !proj.pipes || !proj.pipes.length) return;
+  if(!opSel || !proj.pipes.some(p=>p.id===opSel.id)){
+    selOpPipe(proj.pipes[0]);
+    return;
+  }
+  render3D('opViewer','opT3d','opS3d','opB3d',opSel);
+  if(!document.getElementById('opViewerSvg')){
+    console.warn('[Operation] opViewerSvg missing after forced render:', opSel.id);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5896,7 +5928,14 @@ function initWorkerPage(){
   // 머신 비활성 초기화
   updateWorkerMachines(0);
   // 첫 배관 자동 선택
-  if(PIPE_DATA.length) selWorkerPipe(PIPE_DATA[0].id);
+  if(!workerSel && PIPE_DATA.length){
+    selWorkerPipe(PIPE_DATA[0].id);
+  }else if(workerSel){
+    render3D('workerViewer','wT3d','wS3d','wB3d',workerSel);
+    if(!document.getElementById('workerViewerSvg')){
+      console.warn('[Worker] workerViewerSvg was not created after pipe selection:', workerSel.id);
+    }
+  }
   // 작업자 화면에 back 버튼 추가 (관리자가 전환한 경우)
   const sub=document.getElementById('workerSub');
   if(sub && userRole==='admin') sub.innerHTML='<span onclick="switchToAdmin()" style="cursor:pointer;color:var(--cyan);font-size:8.5px">← 관리자 화면으로</span>';
@@ -5905,6 +5944,17 @@ function initWorkerPage(){
   if(ws){ws.className='start-btn '+(processRunning?'running':'idle');}
   const wt=document.getElementById('wStartTxt');
   if(wt)wt.textContent=processRunning?'⏹ STOP':'▶ START';
+}
+function ensureWorkerPipeSelected(){
+  if(!PIPE_DATA.length) return;
+  if(!workerSel){
+    selWorkerPipe(PIPE_DATA[0].id);
+    return;
+  }
+  render3D('workerViewer','wT3d','wS3d','wB3d',workerSel);
+  if(!document.getElementById('workerViewerSvg')){
+    console.warn('[Worker] workerViewerSvg missing after forced render:', workerSel.id);
+  }
 }
 
 function setWorkerFilter(f){
@@ -5958,6 +6008,9 @@ function selWorkerPipe(pid){
   if(fi>=0 && !processRunning) opPipeIdx=fi;
   renderWorkerPipeList();
   render3D('workerViewer','wT3d','wS3d','wB3d',workerSel);
+  if(!document.getElementById('workerViewerSvg')){
+    console.warn('[Worker] workerViewerSvg was not created after pipe selection:', workerSel.id);
+  }
   // 선택 항목 스크롤
   requestAnimationFrame(()=>{
     const el=document.getElementById('workerPipeList');

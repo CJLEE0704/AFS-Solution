@@ -292,7 +292,8 @@ namespace PipeBendingDashboard.Database
                 // ── 머신별 통계 (이번 달 pipe_machine_log) ─────────
                 var machPairs = new[] {
                     ("LOADER","Auto Loader"),("CUTTING","Cutting M/C"),
-                    ("LASER","Laser Marking"),("BENDING","Bending M/C")
+                    ("LASER","Laser Marking"),("ROBOT","Moving Robot"),
+                    ("BENDING","Bending M/C #1"),("BENDING2","Bending M/C #2")
                 };
                 var machines = new System.Collections.Generic.List<object>();
                 foreach (var (mid, mname) in machPairs)

@@ -371,6 +371,10 @@ body{transition:background .28s ease,color .28s ease}
 .worker-mach.cutting{background:var(--cutting-bg)}
 .worker-mach.laser{background:var(--laser-bg)}
 .worker-mach.bending{background:var(--bending-bg)}
+.bend-layout-single{flex:1.8 !important;min-height:120px !important}
+.bend-layout-dual{flex:1 !important;min-height:0 !important}
+.op-bend-span-2{grid-column:span 2 !important}
+.op-bend-span-1{grid-column:span 1 !important}
 .sett-hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));box-shadow:var(--shadow-soft)}
 .theme-pref-card{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border:1px solid var(--border2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-soft);flex-shrink:0}
 .theme-pref-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -963,7 +967,7 @@ body::before{
       <!-- RIGHT: 머신 그림(상단) + 3D 뷰어(하단) -->
       <div class="op-right" style="display:flex;flex-direction:column;gap:6px">
         <!-- 머신 가로 한 줄 (설정된 구성에 따라 동적 표시) -->
-        <div id="opMachGrid" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;flex-shrink:0;height:130px">
+        <div id="opMachGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;flex-shrink:0;height:130px">
           <div id="opMachWrap4" style="background:#11202A;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach4" viewBox="10 30 330 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#6FB6C9">Auto Loader</div>
@@ -976,9 +980,17 @@ body::before{
             <svg id="opMach2" viewBox="780 30 300 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#C89263">Laser Marking</div>
           </div>
-          <div id="opMachWrap1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap1" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach1" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
-            <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C</div>
+            <div id="opBendBadge1" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C</div>
+          </div>
+          <div id="opMachWrap6" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+            <svg id="opMach6" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
+            <div id="opBendBadge6" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C #2</div>
+          </div>
+          <div id="opMachWrap5" style="background:#102235;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+            <svg id="opMach5" viewBox="0 0 360 280" style="width:100%;height:100%"></svg>
+            <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#63AEC9">Moving Robot</div>
           </div>
         </div>
         <!-- 3D 뷰어 -->
@@ -1216,7 +1228,9 @@ body::before{
       <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px"></div>
+      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
       <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
+      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
     </div>
 
     <!-- COMM LOG + COMMAND PANEL -->
@@ -1240,7 +1254,9 @@ body::before{
             <option value="LOADER">Auto Loader</option>
             <option value="CUTTING">Cutting M/C</option>
             <option value="LASER">Laser Marking</option>
+            <option value="ROBOT">Moving Robot</option>
             <option value="BENDING">Bending M/C</option>
+            <option value="BENDING2">Bending M/C #2</option>
           </select>
         </div>
         <!-- 명령 선택 -->
@@ -1347,8 +1363,8 @@ body::before{
         </div>
       </div>
 
-      <!-- RIGHT: 머신 4개 세로 배치 -->
-      <div style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden">
+      <!-- RIGHT: 머신 세로 배치 -->
+      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden">
         <div id="wMach4" class="worker-mach loader" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 330 280" style="width:100%;height:100%"><g id="wm4"></g></svg>
           <div id="wm4badge" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#6FB6C930;color:#6FB6C9;font-weight:700;border:1px solid #6FB6C944">Auto Loader</div>
@@ -1361,9 +1377,17 @@ body::before{
           <svg viewBox="0 0 300 280" style="width:100%;height:100%"><g id="wm2"></g></svg>
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#C8926330;color:#C89263;font-weight:700;border:1px solid #C8926344">Laser Marking</div>
         </div>
+        <div id="wMach5" class="worker-mach" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:#102235;border:1px solid var(--border)">
+          <svg viewBox="0 0 360 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
+          <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#63AEC930;color:#63AEC9;font-weight:700;border:1px solid #63AEC944">Moving Robot</div>
+        </div>
         <div id="wMach1" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 400 280" style="width:100%;height:100%"><g id="wm1"></g></svg>
-          <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C</div>
+          <div id="wmBendBadge1" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C</div>
+        </div>
+        <div id="wMach6" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
+          <svg viewBox="0 0 400 280" style="width:100%;height:100%"><g id="wm6"></g></svg>
+          <div id="wmBendBadge6" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C #2</div>
         </div>
       </div>
     </div>
@@ -1419,11 +1443,11 @@ body::before{
           <div>
             <div style="font-size:11px;font-weight:700;color:var(--bright)">Bending Machine Kiosk — 장비 구성 선택</div>
             <div style="font-size:8.5px;color:var(--dim);margin-top:2px;line-height:1.6">
-              아래 4가지 구성 중 하나를 선택하세요. 선택한 장비만 Dashboard에서 동작합니다.
+              Loader → Cutting → Marking → Moving Robot → Bending(1) → Bending(2) 순서로 개별 장비를 선택하세요.
             </div>
           </div>
         </div>
-        <div id="cfgCards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+        <div id="cfgCards" style="display:grid;grid-template-columns:1fr;gap:8px;"></div>
       </div>
 
       <!-- ── RIGHT: 로그인 계정 관리 (관리자 전용) ── -->
@@ -2337,7 +2361,7 @@ function playDashBend(svg, shape, cb){
 // 대시보드 머신 시퀀스 (Full Line 기준, 선택 구성 따름)
 function dashAutoLoop(){
   if(!dashAutoRunning) return;
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   const steps=[...cfg.machines];
   const stepIdx=dashAutoStep % steps.length;
   const n=steps[stepIdx];
@@ -2514,12 +2538,22 @@ const MSVG={
   2:a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#140c04" stroke="#D39D63" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="780" y="30" width="300" height="280" rx="10" fill="#D39D63" fill-opacity="${a?.07:0}"/><rect x="808" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="896" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="984" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><polygon points="837,148 851,175 823,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" repeatCount="indefinite"/>`:''}</polygon><polygon points="925,148 939,175 911,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".12s" repeatCount="indefinite"/>`:''}</polygon><polygon points="1013,148 1027,175 999,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".24s" repeatCount="indefinite"/>`:''}</polygon><text x="930" y="265" text-anchor="middle" fill="#D39D63" font-size="32" font-weight="800" opacity="${a?1:.5}">Laser Marking</text>${a?`${mkGlow(780,30,300,280,10,'#D39D63')}${mkScan(781,31,298,278,'#D39D63')}${mkBadge(786,35,'#522c0a')}`:''} `,
   1:a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `,
 };
+MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
+MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
+<rect x="20" y="30" width="320" height="220" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
+<rect x="60" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
+<circle cx="105" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2"/>
+<circle cx="255" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2"/>
+<rect x="155" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6"/>
+<line x1="105" y1="163" x2="180" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
+<line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
+<text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>`;
 
 function updateFlow(n){
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   const active=cfg.machines;
 
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
     el.innerHTML=MSVG[i](n===i);  // 그림은 항상 렌더
     if(active.includes(i)){
@@ -2542,22 +2576,24 @@ function updateFlow(n){
   if(n===3)svg.classList.add('step3');
   else if(n===2)svg.classList.add('step2');
   else if(n===1)svg.classList.add('step1');
-  const C={4:'#69B8D6',3:'#73C59B',2:'#D39D63',1:'#9285D4'};
-  const L={4:'Auto Loader',3:'Cutting M/C',2:'Laser Marking',1:'Bending M/C'};
+  const C={4:'#69B8D6',3:'#73C59B',2:'#D39D63',5:'#63AEC9',1:'#9285D4',6:'#9285D4'};
+  const L={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
   const sd=document.getElementById('stepDot'); if(sd) sd.style.background=n?C[n]:'var(--dim)';
   const st=document.getElementById('stepText'); if(st) st.textContent=n?L[n]:'대기 중';
-  const nm={4:'Auto',3:'Cutting',2:'Laser',1:'Bending'};
+  const nm={4:'Loader',3:'Cutting',2:'Marking',5:'Robot',1:'Bending #1',6:'Bending #2'};
   initMachList(n?nm[n]:null);
 }
 function updateFlowIdle(){updateFlow(0);}
 function initMachList(active){
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   const activeMachIds=cfg.machines;
   const allMs=[
-    {id:'Loader',  lbl:'Auto',    col:'#6FB6C9', machId:4},
-    {id:'Cutting', lbl:'Cutting', col:'#6FB58A', machId:3},
-    {id:'Laser',   lbl:'Laser',   col:'#C89263', machId:2},
-    {id:'BM-01',   lbl:'Bending', col:'#877BC6', machId:1}
+    {id:'Loader',   lbl:'Loader',    col:'#6FB6C9', machId:4},
+    {id:'Cutting',  lbl:'Cutting',   col:'#6FB58A', machId:3},
+    {id:'Marking',  lbl:'Marking',   col:'#C89263', machId:2},
+    {id:'Robot',    lbl:'Robot',     col:'#63AEC9', machId:5},
+    {id:'BM-01',    lbl:'Bending #1',col:'#877BC6', machId:1},
+    {id:'BM-02',    lbl:'Bending #2',col:'#877BC6', machId:6}
   ];
   const ms=allMs.filter(m=>activeMachIds.includes(m.machId));
   const el=document.getElementById('machList'); if(!el) return;
@@ -2986,20 +3022,20 @@ function selOpPipe(pipe){
 // ═══════════════════════════════════════════════════════════════
 // ── 현재 선택 구성의 활성 step 배열 반환 ──
 function getActiveSteps(){
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   return [...cfg.machines]; // e.g. [4,3,2,1] or [3,1] or [1]
 }
 
 // ── Operation 머신 그리드를 선택 구성에 맞게 갱신 ──
 function applyConfigToOperation(){
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   const active=cfg.machines;
   const n=active.length;
   const grid=document.getElementById('opMachGrid');
   if(grid) grid.style.gridTemplateColumns=`repeat(${n},1fr)`;
 
   // 각 머신 카드: 순서 재정렬 + show/hide
-  const ORDER=[4,3,2,1]; // 기본 DOM 순서
+  const ORDER=[4,3,2,5,1,6]; // 기본 DOM 순서
   // active 배열 순서대로 카드를 grid에 재정렬
   if(grid){
     const sorted=active.slice().reverse(); // flowSvg 기준 왼쪽→오른쪽: 4,3,2,1
@@ -3063,12 +3099,115 @@ function applyConfigToOperation(){
   const cfgFlow=document.getElementById('opCfgFlow');
   if(cfgDot) cfgDot.style.background=cfg.col;
   if(cfgLbl){cfgLbl.textContent=cfg.badge;cfgLbl.style.color=cfg.col;}
-  if(cfgFlow) cfgFlow.textContent=steps.map(s=>STEP_LABEL[s]).join(' → ');
+  if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
+
+  applyConfigToWorkerLayout(active);
 }
 
-const STEP_LABEL={4:'Auto Loader',3:'Cutting M/C',2:'Laser Marking',1:'Bending M/C'};
-const STEP_DUR={4:2200,3:3800,2:2800,1:6000};
-const STEP_COL={4:'#6FB6C9',3:'#6FB58A',2:'#C89263',1:'#877BC6'};
+function applyConfigToWorkerLayout(active){
+  const wMap={4:'wMach4',3:'wMach3',2:'wMach2',5:'wMach5',1:'wMach1',6:'wMach6'};
+  Object.entries(wMap).forEach(([id, wid])=>{
+    const el=document.getElementById(wid); if(!el) return;
+    el.style.display = active.includes(Number(id)) ? 'block' : 'none';
+    el.style.flex = '1';
+    el.classList.remove('bend-layout-single','bend-layout-dual');
+  });
+
+  const wB1=document.getElementById('wMach1');
+  const wB2=document.getElementById('wMach6');
+  const hasB1=active.includes(1);
+  const hasB2=active.includes(6);
+  if(wB1 && wB2){
+    if(hasB1 && hasB2){
+      wB1.style.display='block';
+      wB2.style.display='block';
+      wB1.classList.add('bend-layout-dual');
+      wB2.classList.add('bend-layout-dual');
+    }else if(hasB1 && !hasB2){
+      wB1.style.display='block';
+      wB2.style.display='none';
+      wB1.classList.add('bend-layout-single');
+    }else if(!hasB1 && hasB2){
+      wB1.style.display='none';
+      wB2.style.display='block';
+      wB2.classList.add('bend-layout-single');
+    }
+  }
+
+  const opB1=document.getElementById('opMachWrap1');
+  const opB2=document.getElementById('opMachWrap6');
+  if(opB1){ opB1.classList.remove('op-bend-span-2'); opB1.classList.add('op-bend-span-1'); }
+  if(opB2){ opB2.classList.remove('op-bend-span-2'); opB2.classList.add('op-bend-span-1'); }
+  if(opB1 && opB2){
+    if(hasB1 && !hasB2){
+      opB1.classList.remove('op-bend-span-1');
+      opB1.classList.add('op-bend-span-2');
+    }else if(!hasB1 && hasB2){
+      opB2.classList.remove('op-bend-span-1');
+      opB2.classList.add('op-bend-span-2');
+    }
+  }
+}
+
+const STEP_LABEL={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
+// 공정 시간(밀리초): 현장 체감에 맞춘 기본값 + 소폭 랜덤 편차
+const STEP_DUR={4:10000,3:60000,2:30000,5:10000,1:120000,6:120000};
+const STEP_DUR_RANGE={
+  4:[9000,10000],      // Loader (10초 이내)
+  3:[55000,65000],     // Cutting (60초 내외)
+  2:[25000,35000],     // Marking (30초 이내)
+  5:[9000,10000],      // Moving Robot (10초 이내)
+  1:[100000,120000],   // Bending #1 (120초 이내)
+  6:[100000,120000]    // Bending #2 (120초 이내)
+};
+const STEP_COL={4:'#6FB6C9',3:'#6FB58A',2:'#C89263',5:'#63AEC9',1:'#877BC6',6:'#877BC6'};
+
+function pickStepDuration(step){
+  const range = STEP_DUR_RANGE[step];
+  if(!range) return STEP_DUR[step] || 2200;
+  const [min,max] = range;
+  return Math.floor(min + Math.random() * (max - min + 1));
+}
+const PIPE_TRACE = new Map();
+const PIPE_TRACE_MAX = 10;
+function appendPipeTrace(pipeIdx, message){
+  const pid = PIPE_DATA[pipeIdx % PIPE_DATA.length].id;
+  const rows = PIPE_TRACE.get(pid) || [];
+  rows.push(message);
+  while(rows.length > PIPE_TRACE_MAX) rows.shift();
+  PIPE_TRACE.set(pid, rows);
+}
+function formatPipeTrace(pipeIdx){
+  const pid = PIPE_DATA[pipeIdx % PIPE_DATA.length].id;
+  const rows = PIPE_TRACE.get(pid) || [];
+  if(rows.length===0) return '';
+  return ` | ${pid} 이력: ${rows.join(' → ')}`;
+}
+function updateLoaderReadyVisual(){
+  const badge=document.getElementById('wm4badge');
+  if(!badge) return;
+  const ready = loaderBufferCount > 0;
+  badge.style.background = ready ? '#6FB58A44' : '#6FB6C930';
+  badge.style.color = ready ? '#6FB58A' : '#6FB6C9';
+  badge.style.borderColor = ready ? '#6FB58A77' : '#6FB6C944';
+  badge.textContent = ready ? `Auto Loader ● Ready (${loaderBufferCount})` : 'Auto Loader';
+}
+function updateBendingIndependentVisual(){
+  [1,6].forEach(id=>{
+    const active = !!stageSlots[id];
+    const wBadge = document.getElementById(`wmBendBadge${id}`);
+    const oBadge = document.getElementById(`opBendBadge${id}`);
+    if(wBadge){
+      wBadge.style.background = active ? '#877BC655' : '#877BC630';
+      wBadge.style.borderColor = active ? '#9D90E6AA' : '#877BC644';
+      wBadge.textContent = id===1 ? `Bending M/C${active?' ● RUN':''}` : `Bending M/C #2${active?' ● RUN':''}`;
+    }
+    if(oBadge){
+      oBadge.style.color = active ? '#B3A7F2' : '#877BC6';
+      oBadge.textContent = id===1 ? `Bending M/C${active?' ● RUN':''}` : `Bending M/C #2${active?' ● RUN':''}`;
+    }
+  });
+}
 
 function setStartBtn(running){const btn=document.getElementById('startBtn'),txt=document.getElementById('startBtnTxt');if(!btn)return;btn.className='start-btn '+(running?'running':'idle');txt.textContent=running?'⏹ STOP':'▶ START';}
 function setEmergBtn(armed){const btn=document.getElementById('emergBtn');if(btn){btn.style.animation=armed?'startPulseRed .6s infinite':'none';}}
@@ -3095,7 +3234,7 @@ const CONV_Y=143, CONV_H=24;   // 배관 top y, 두께 — 머신 작업 라인�
 const PIPE_LEN=240;            // 배관 길이
 // 각 머신에서 배관 정지 위치 (left-edge x)
 // M4(Loader):x=10-340, M3(Cutting):x=410-710, M2(Laser):x=780-1080, M1(Bending):x=1150-1550
-const PIPE_DWELL={start:-270, 4:58, 3:440, 2:808, 1:1168};
+const PIPE_DWELL={start:-270, 4:58, 3:440, 2:808, 5:980, 1:1168, 6:1210};
 
 let pipeEl=null;
 let pipeCurX=-270;
@@ -3311,142 +3450,173 @@ function updateViewersForPipe(idx){
 // ── 사이클 시작 시간 추적 ───────────────────────────────
 let _cycleStartTime  = 0;
 let _stepStartTime   = 0;  // 각 머신 스텝 시작 시간
+let loaderBufferCount = 0; // Loader 사전 준비 버퍼(인라인 공급)
+let loaderPrefetchTimer = null;
+const LOADER_BUFFER_MAX = 2;
+let pipelineTimer = null;
+let stageSlots = {};      // { stepId: {pipeIdx, remain} | null }
+let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
 
 // 머신 번호 → ID 매핑
-const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 1:'BENDING'};
+const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
 
-function runStep(n){
-  if(!processRunning)return;
-  currentStep=n;
-  _stepStartTime = Date.now();  // ← 이 머신 스텝 시작 시간 기록
-  updateFlow(n);
-  updateWorkerMachines(n);
-  const col=STEP_COL[n],label=STEP_LABEL[n];
-  setDashStatus(true,label+' 가동 중',col);
-  setOpStatus(true,'가동 중',col);
-  document.getElementById('opMach').style.color=col;
-  document.getElementById('opMach').textContent=label;
-  setOpLog(`▶ [${label}] 공정 진행 중...`);
-
-  const svg=document.getElementById('flowSvg');
-  const steps=getActiveSteps();
-  const idx=steps.indexOf(n);
-
-  // 최초 실행 or 사이클 첫 스텝: 배관 생성 + 3D 뷰어 업데이트
-  if(!document.getElementById('movingPipe')){
-    pipeCurX=PIPE_DWELL.start;
-    buildMovingPipe(svg);
-    const ptg=document.getElementById('ptg');
-    if(ptg){ptg.style.transition='opacity 0.4s';ptg.style.opacity='0';}
+function stopLoaderPrefetch(){
+  if(loaderPrefetchTimer){
+    clearTimeout(loaderPrefetchTimer);
+    loaderPrefetchTimer = null;
   }
+}
 
-  // 첫 스텝(로더 or 첫 번째 활성 머신)일 때 3D 뷰어 갱신 + 사이클 시작시간 기록
-  if(idx===0){
-    updateViewersForPipe(opPipeIdx);
-    _cycleStartTime = Date.now();  // ← 사이클 시작 시간 기록
+function scheduleLoaderPrefetch(){
+  if(!processRunning) return;
+  if(!getActiveSteps().includes(4)) return;
+  if(loaderBufferCount >= LOADER_BUFFER_MAX) return;
+  if(loaderPrefetchTimer) return;
+
+  // Loader는 다음 배관을 미리 집어서 Cutting 투입 대기 상태를 만든다.
+  loaderPrefetchTimer = setTimeout(()=>{
+    loaderPrefetchTimer = null;
+    if(!processRunning) return;
+    if(loaderBufferCount < LOADER_BUFFER_MAX){
+      loaderBufferCount++;
+      appendPipeTrace(nextPipeFeedIdx, `Loader Ready(${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
+      setOpLog(`↻ [Loader M/C] 다음 배관 사전 준비 완료 (버퍼 ${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
+      updateLoaderReadyVisual();
+    }
+    if(loaderBufferCount < LOADER_BUFFER_MAX){
+      scheduleLoaderPrefetch();
+    }
+  }, Math.max(1200, Math.floor((STEP_DUR[4]||2200) * 0.75)));
+}
+
+function initPipelineSlots(){
+  stageSlots = {};
+  const active = getActiveSteps();
+  active.forEach(s=>stageSlots[s]=null);
+}
+
+function stageName(s){ return STEP_LABEL[s] || String(s); }
+
+function chooseReadyBending(active){
+  const cands = active.filter(s=>s===1 || s===6);
+  if(cands.length===0) return null;
+  // 빈 슬롯 우선
+  const idle = cands.filter(s=>!stageSlots[s]);
+  if(idle.length===1) return idle[0];
+  if(idle.length===2){
+    // 양쪽 모두 비어있으면 교대 분배
+    return (cycleCount % 2 === 0) ? 1 : 6;
   }
+  // 둘 다 동작 중이면 남은 시간이 더 짧은 장비 우선
+  if(cands.length===2){
+    const [a,b] = cands;
+    const ra = stageSlots[a]?.remain ?? Number.MAX_SAFE_INTEGER;
+    const rb = stageSlots[b]?.remain ?? Number.MAX_SAFE_INTEGER;
+    if(ra !== rb) return ra < rb ? a : b;
+  }
+  return null;
+}
 
-  const targetX=PIPE_DWELL[n]!==undefined?PIPE_DWELL[n]:PIPE_DWELL.start;
-  const travelDur=1100;
+function updatePipelineVisual(){
+  const active = getActiveSteps();
+  const occupied = active.filter(s=>stageSlots[s]);
+  const lead = occupied.length ? occupied[occupied.length-1] : 0;
+  currentStep = lead || 0;
+  if(lead){
+    updateFlow(lead);
+    updateWorkerMachines(lead);
+    setDashStatus(true, `${stageName(lead)} 가동 중`, STEP_COL[lead] || 'var(--cyan)');
+    setOpStatus(true, '가동 중', STEP_COL[lead] || 'var(--cyan)');
+  }else{
+    updateFlowIdle();
+    updateWorkerMachines(0);
+    setDashStatus(false,'대기 중');
+    setOpStatus(false,'대기 중');
+  }
+  updateLoaderReadyVisual();
+  updateBendingIndependentVisual();
+}
 
-  movePipeTo(targetX, travelDur, ()=>{
-    if(!processRunning)return;
+function runPipelineTick(){
+  if(!processRunning) return;
+  const active = getActiveSteps();
+  if(active.length===0) return;
 
-    // ── 머신 처리 이력 저장 헬퍼 ──────────────────────────
-    function saveMachineLog(result='완료'){
-      const finishedPipe  = PIPE_DATA[opPipeIdx % PIPE_DATA.length];
-      const activeProj    = projects.find(p=>p.pipes&&p.pipes.some(pp=>pp.id===finishedPipe.id));
-      const stepTimeSec   = _stepStartTime > 0
-        ? Math.round((Date.now() - _stepStartTime) / 1000) : null;
-      window.sendToCSharp('SAVE_PIPE_MACHINE', 'ALL', JSON.stringify({
-        pipeId:     finishedPipe.id,
-        projectId:  activeProj ? activeProj.id : 'DEMO',
-        machineId:  MACHINE_ID_MAP[n] || String(n),
-        machineName:STEP_LABEL[n] || '',
-        configId:   selectedConfig,
-        operatorId: currentUserId || (userRole==='worker'?'worker':'admin'),
-        result:     result,
-        cycleTimeSec: stepTimeSec,
-      }));
-    }
-
-    if(n===1){
-      // 밴딩 머신
-      const shapeIdx = PIPE_DATA[opPipeIdx%PIPE_DATA.length].id.match(/\d+/g)
-        ? parseInt(PIPE_DATA[opPipeIdx%PIPE_DATA.length].id.match(/\d+/g).slice(-1)[0])%SHAPES.length : 0;
-      const shapeName = SHAPES[shapeIdx].name;
-      setOpLog(`🔧 [Bending M/C] ${shapeName} 밴딩 중...`);
-
-      if(pipeEl){
-        pipeEl.style.transition = 'opacity 0.4s';
-        pipeEl.style.opacity = '0';
-      }
-
-      playBendAnim(svg, ()=>{
-        if(!processRunning)return;
-        setOpLog(`✅ 밴딩 완료 — ${shapeName} 형성`);
-        saveMachineLog('완료');  // ← Bending 완료 기록
-        if(pipeEl){ pipeEl.remove(); pipeEl = null; }
-        setTimeout(()=>{if(processRunning)goNext();}, 300);
-      });
-    } else {
-      const dwell=Math.max(400, STEP_DUR[n]-travelDur);
-      cycleTimer=setTimeout(()=>{
-        if(!processRunning)return;
-        saveMachineLog('완료');  // ← 각 머신 완료 기록
-        goNext();
-      }, dwell);
-    }
+  // 1) 처리 시간 감소
+  active.forEach(s=>{
+    const slot = stageSlots[s];
+    if(slot) slot.remain -= 250;
   });
 
-  function goNext(){
-    const nextIdx=(idx+1)%steps.length;
-    const next=steps[nextIdx];
-    if(nextIdx===0){
-      // ── 사이클 완료 → 다음 배관으로 ──
+  // 2) 뒤에서 앞으로 이동 시도
+  for(let i=active.length-1;i>=0;i--){
+    const s = active[i];
+    const slot = stageSlots[s];
+    if(!slot || slot.remain > 0) continue;
+
+    // Bending 완료
+    if(s===1 || s===6){
       cycleCount++;
-      const c=document.getElementById('opCycles');if(c)c.textContent=cycleCount;
-
-      // ── 사이클 소요 시간 계산 (초) ──
-      const cycleTimeSec = _cycleStartTime > 0
-        ? Math.round((Date.now() - _cycleStartTime) / 1000) : null;
-
-      // ── OEE 스냅샷: 활성 머신의 평균 OEE ──
-      let oeeSnap = 0;
-      try{
-        const cfg2 = CONFIGS.find(cc=>cc.id===selectedConfig)||CONFIGS[3];
-        const machIds = {1:'BENDING',2:'LASER',3:'CUTTING',4:'LOADER'};
-        const oeeVals = cfg2.machines
-          .map(mi=>machSt[machIds[mi]]?.oee||0)
-          .filter(v=>v>0);
-        oeeSnap = oeeVals.length > 0
-          ? Math.round(oeeVals.reduce((a,b)=>a+b,0)/oeeVals.length*10)/10 : 0;
-      }catch(e){}
-
-      // ── DB에 생산 실적 저장 ──
-      const finishedPipe = PIPE_DATA[opPipeIdx % PIPE_DATA.length];
-      const activeProj = projects.find(p=>p.pipes&&p.pipes.some(pp=>pp.id===finishedPipe.id));
-      window.sendToCSharp('SAVE_PRODUCTION','ALL', JSON.stringify({
-        pipeId:       finishedPipe.id,
-        projectId:    activeProj ? activeProj.id   : 'DEMO',
-        projName:     activeProj ? activeProj.name : 'DEMO 프로젝트',
-        configId:     selectedConfig,
-        result:       finishedPipe.status === '불량' ? '불량' : '완료',
-        material:     finishedPipe.material || 'SS400',
-        size:         finishedPipe.size     || 32,
-        pipeStatus:   finishedPipe.status   || '완료',
-        cycleTimeSec: cycleTimeSec,          // ← 실제 소요시간
-        oee:          oeeSnap,               // ← 실제 OEE 스냅샷
-        operatorId:   currentUserId || (userRole==='worker'?'worker':'admin'),
-      }));
-
-      opPipeIdx=(opPipeIdx+1)%PIPE_DATA.length;
-      setOpLog(`✅ ${cycleCount}번째 사이클 완료 — 새 배관 투입 (${PIPE_DATA[opPipeIdx%PIPE_DATA.length].id})`);
-      pipeCurX=PIPE_DWELL.start;
-      if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
+      const c=document.getElementById('opCycles'); if(c) c.textContent=cycleCount;
+      appendPipeTrace(slot.pipeIdx, `${stageName(s)} 완료`);
+      setOpLog(`✅ 배관 ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id} 완료 (${stageName(s)})${formatPipeTrace(slot.pipeIdx)}`);
+      stageSlots[s]=null;
+      continue;
     }
-    runStep(next);
+
+    // Robot -> Bending 분기
+    if(s===5){
+      const target = chooseReadyBending(active);
+      if(target && !stageSlots[target]){
+        stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
+        stageSlots[s] = null;
+        appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
+        setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}${formatPipeTrace(slot.pipeIdx)}`);
+      }
+      continue;
+    }
+
+    // 일반 다음 공정 이동
+    const next = active[i+1];
+    if(next && !stageSlots[next]){
+      stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
+      appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
+      stageSlots[s] = null;
+    }
   }
+
+  // 3) Loader 투입 (지속 공급)
+  if(active.includes(4) && !stageSlots[4]){
+    stageSlots[4] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(4) };
+    const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
+    appendPipeTrace(nextPipeFeedIdx, 'Loader 투입');
+    setOpLog(`📥 Loader 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
+    nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
+  }
+
+  updatePipelineVisual();
+}
+
+function startPipelineMode(startIdx){
+  nextPipeFeedIdx = startIdx || 0;
+  initPipelineSlots();
+  clearInterval(pipelineTimer);
+  pipelineTimer = setInterval(runPipelineTick, 250);
+}
+
+function stopPipelineMode(){
+  clearInterval(pipelineTimer);
+  pipelineTimer = null;
+  initPipelineSlots();
+  updateBendingIndependentVisual();
+  updateLoaderReadyVisual();
+}
+
+function runStep(n){
+  // Legacy sequential engine is intentionally disabled.
+  // Runtime must use pipeline scheduler (startPipelineMode/runPipelineTick).
+  if(!processRunning) return;
+  if(!pipelineTimer) startPipelineMode(opPipeIdx);
 }
 
 function handleStart(){
@@ -3463,6 +3633,11 @@ function handleStart(){
     if(ptg){ptg.style.transition='opacity 0.5s';ptg.style.opacity='1';}
     updateWorkerMachines(0); syncWorkerBtn(false);
     syncRunningLock(false);
+    stopLoaderPrefetch();
+    loaderBufferCount = 0;
+    PIPE_TRACE.clear();
+    stopPipelineMode();
+    updateLoaderReadyVisual();
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -3479,9 +3654,13 @@ function handleStart(){
     opPipeIdx = PIPE_DATA.findIndex(p=>p.id===startPipe.id);
     if(opPipeIdx<0) opPipeIdx=0;
     const steps=getActiveSteps();
-    const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+    const cfg=getActiveConfig();
     setOpLog(`▶ [${cfg.title}] 라인 가동 — ${PIPE_DATA[opPipeIdx].id} 투입 시작`);
-    runStep(steps[0]);
+    PIPE_TRACE.clear();
+    loaderBufferCount = 0;
+    stopLoaderPrefetch();
+    startPipelineMode(opPipeIdx);
+    updateLoaderReadyVisual();
   }
 }
 
@@ -3503,7 +3682,8 @@ function _getDisconnectedMachines(){
 function _showCommErrorPopup(disconnectedIds){
   const mNames = {
     LOADER:'Auto Loader', CUTTING:'Cutting M/C',
-    LASER:'Laser Marking', BENDING:'Bending M/C'
+    LASER:'Laser Marking', ROBOT:'Moving Robot',
+    BENDING:'Bending M/C #1', BENDING2:'Bending M/C #2'
   };
   const machineList = disconnectedIds.map(id=>mNames[id]||id).join(', ');
 
@@ -3616,6 +3796,10 @@ function handleEmergency(){
   const ptg=document.getElementById('ptg');
   if(ptg){ptg.style.transition='opacity 0.5s';ptg.style.opacity='1';}
   updateWorkerMachines(0); syncWorkerBtn(false);
+  PIPE_TRACE.clear();
+  loaderBufferCount = 0;
+  updateLoaderReadyVisual();
+  stopPipelineMode();
   syncRunningLock(false);  // ← 비상 정지 시 잠금 해제
 }
 
@@ -4678,7 +4862,9 @@ const MACHINES_DEFAULT=[
   {id:'LOADER',  name:'Auto Loader',   col:'#69B8D6', proto:'TCP/IP', ip:'192.168.1.10', port:5000},
   {id:'CUTTING', name:'Cutting M/C',   col:'#73C59B', proto:'TCP/IP', ip:'192.168.1.11', port:5000},
   {id:'LASER',   name:'Laser Marking', col:'#D39D63', proto:'TCP/IP', ip:'192.168.1.12', port:5000},
+  {id:'ROBOT',   name:'Moving Robot',  col:'#63AEC9', proto:'TCP/IP', ip:'192.168.1.14', port:5000},
   {id:'BENDING', name:'Bending M/C',   col:'#9285D4', proto:'TCP/IP', ip:'192.168.1.13', port:5000},
+  {id:'BENDING2',name:'Bending M/C #2',col:'#9285D4', proto:'TCP/IP', ip:'192.168.1.15', port:5000},
 ];
 
 // MACHINES_DEFAULT의 딥카피 생성 (MACHINES_DEFAULT를 절대 건드리지 않음)
@@ -4724,11 +4910,11 @@ function simTick(mid){
   const s=machSt[mid]; if(!s) return;
   // 비활성 머신(타이머가 없는 머신)은 건너뜀
   if(!simTimers[mid]) return;
-  // 시뮬 모드: C#에서 ERROR로 설정됐어도 IDLE로 복구 (시뮬은 자체 상태 관리)
-  if(s.status==='ERROR') s.status='IDLE';
+  // 시뮬 모드: C#에서 DOWN으로 설정됐어도 IDLE로 복구 (시뮬은 자체 상태 관리)
+  if(s.status==='DOWN') s.status='IDLE';
   s.connected = true;
   if(!s.lastMsg || s.lastMsg==='—' || s.lastMsg==='연결 실패') s.lastMsg='시뮬레이션 중';
-  if(s.status==='RUNNING'){
+  if(s.status==='RUN'){
     s.oee=Math.min(99,(s.oee||80)+(Math.random()*1.5-0.5));
     s.speed=Math.max(0,(s.speed||100)+(Math.random()*5-2));
     if(Math.random()<0.015) s.alarm=true;
@@ -4806,7 +4992,7 @@ function simCmd(target,code,param){
   setTimeout(()=>{
     ids.forEach(mid=>{
       const s=machSt[mid]; let resp='';
-      if(code==='START'){s.status='RUNNING';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
+      if(code==='START'){s.status='RUN';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
       else if(code==='STOP'){s.status='IDLE';s.speed=0;resp='정지 완료';}
       else if(code==='RESET'){s.status='IDLE';s.alarm=false;s.oee=0;s.speed=0;resp='리셋 완료';}
       else if(code==='STATUS'){resp=`STATUS:${s.status} OEE:${s.oee.toFixed(1)}% SPD:${Math.round(s.speed)}`;}
@@ -4887,7 +5073,7 @@ function quickCmd(t,c,p){
 function toggleSimMode(on){
   simModeOn=on;
   if(on){
-    // 시뮬 ON: 기존 C# 상태(ERROR/미연결)를 초기화 (활성 머신만)
+    // 시뮬 ON: 기존 C# 상태(DOWN/미연결)를 초기화 (활성 머신만)
     const activeOnIds = getActiveCommMachineIds();
     MACHINES.forEach(m=>{
       if(!activeOnIds.includes(m.id)) return;
@@ -5037,14 +5223,14 @@ function renderCard(mid){
     return;
   }
 
-  const stColor = {RUNNING:'#73C59B',IDLE:'#72879E',ERROR:'#D37489',ALARM:'#CBAF6D'}
+  const stColor = {RUN:'#73C59B',IDLE:'#72879E',DOWN:'#D37489',ALARM:'#CBAF6D',MANUAL:'#8E7BCF'}
                   [s.alarm?'ALARM':s.status] || '#72879E';
-  const stTxt   = {RUNNING:'가동 중',IDLE:'대기',ERROR:'오류',ALARM:'알람'}
+  const stTxt   = {RUN:'가동 중',IDLE:'대기',DOWN:'다운',ALARM:'알람',MANUAL:'수동'}
                   [s.alarm?'ALARM':s.status] || s.status;
 
   // 상태 dot
   const dot = document.getElementById('cdot_'+mid);
-  if(dot){ dot.style.background = stColor; dot.style.animation = s.status==='RUNNING'?'dotBlink .8s infinite':'none'; }
+  if(dot){ dot.style.background = stColor; dot.style.animation = s.status==='RUN'?'dotBlink .8s infinite':'none'; }
   // 상태 뱃지
   const stEl = document.getElementById('cst_'+mid);
   if(stEl){ stEl.textContent = stTxt; stEl.style.color = stColor; stEl.style.background = stColor+'22'; stEl.style.borderColor = stColor+'44'; }
@@ -5145,11 +5331,11 @@ function renderAllCards(){MACHINES.forEach(m=>renderCard(m.id));}
 // Settings 구성 → Comm 화면 동기화
 // machines 숫자 매핑: 1=BENDING, 2=LASER, 3=CUTTING, 4=LOADER
 // ══════════════════════════════════════════════════════════════════
-const _CFG_NUM_TO_ID = {1:'BENDING', 2:'LASER', 3:'CUTTING', 4:'LOADER'};
-const _CFG_NUM_TO_NAME = {1:'Bending M/C', 2:'Laser Marking', 3:'Cutting M/C', 4:'Auto Loader'};
+const _CFG_NUM_TO_ID = {1:'BENDING', 2:'LASER', 3:'CUTTING', 4:'LOADER', 5:'ROBOT', 6:'BENDING2'};
+const _CFG_NUM_TO_NAME = {1:'Bending M/C', 2:'Marking M/C', 3:'Cutting M/C', 4:'Loader M/C', 5:'Moving Robot', 6:'Bending M/C #2'};
 
 function getActiveCommMachineIds(){
-  const cfg = CONFIGS.find(c=>c.id===selectedConfig) || CONFIGS[3];
+  const cfg = getActiveConfig();
   return cfg.machines.map(n => _CFG_NUM_TO_ID[n]).filter(Boolean);
 }
 
@@ -5160,14 +5346,14 @@ function applyConfigToComm(){
   _applyCommTimer = setTimeout(_applyConfigToCommNow, 50);
 }
 function _applyConfigToCommNow(){
-  const cfg     = CONFIGS.find(c=>c.id===selectedConfig) || CONFIGS[3];
+  const cfg     = getActiveConfig();
   const activeIds = cfg.machines.map(n=>_CFG_NUM_TO_ID[n]).filter(Boolean);
-  const allIds    = ['LOADER','CUTTING','LASER','BENDING'];
+  const allIds    = ['LOADER','CUTTING','LASER','ROBOT','BENDING','BENDING2'];
 
   const grid = document.getElementById('machineCards');
   if(grid){
-    // 항상 2×2 그리드 유지 (4개 카드 모두 표시)
-    grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    // 6개 카드 표시
+    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
   }
 
   // ── 각 카드: 활성/비활성 시각 처리 ──
@@ -5232,8 +5418,8 @@ function _applyConfigToCommNow(){
     const allOpt = document.createElement('option');
     allOpt.value = 'ALL'; allOpt.textContent = '전체 활성 머신 (ALL)';
     sel.appendChild(allOpt);
-    // LOADER→CUTTING→LASER→BENDING 고정 순서로
-    ['LOADER','CUTTING','LASER','BENDING'].forEach(id => {
+    // LOADER→CUTTING→LASER→ROBOT→BENDING→BENDING2 고정 순서
+    ['LOADER','CUTTING','LASER','ROBOT','BENDING','BENDING2'].forEach(id => {
       if(!activeIds.includes(id)) return;
       const m = MACHINES.find(x=>x.id===id); if(!m) return;
       const opt = document.createElement('option');
@@ -5293,25 +5479,44 @@ function initCommPage(){
 // SETTINGS MODULE — 장비 구성 선택
 // ═══════════════════════════════════════════════════════════════
 
-// 구성 정의: machines = 포함 머신 ID (1=Bending, 2=Laser, 3=Cutting, 4=Loader)
-const CONFIGS=[
-  {id:'CFG_1',title:'Bending M/C 단독',    badge:'1머신',col:'#877BC6',machines:[1],
-   desc:'밴딩머신만 운용하는 최소 구성'},
-  {id:'CFG_2',title:'Bending + Cutting',    badge:'2머신',col:'#6FB58A',machines:[3,1],
-   desc:'절단기 + 밴딩머신 구성'},
-  {id:'CFG_3',title:'Bending + Cutting + Laser', badge:'3머신',col:'#C89263',machines:[3,2,1],
-   desc:'절단기 + 레이저 마킹기 + 밴딩머신'},
-  {id:'CFG_4',title:'Full Line (이송로봇 포함)', badge:'풀라인',col:'#6FB6C9',machines:[4,3,2,1],
-   desc:'이송로봇 + 절단기 + 마킹기 + 밴딩머신 전체 라인'},
-];
+const MACHINE_ORDER=[4,3,2,5,1,6];
+const MACHINE_META={
+  4:{name:'Loader M/C', col:'#6FB6C9'},
+  3:{name:'Cutting M/C', col:'#6FB58A'},
+  2:{name:'Marking M/C', col:'#C89263'},
+  5:{name:'Moving Robot', col:'#63AEC9'},
+  1:{name:'Bending M/C', col:'#877BC6'},
+  6:{name:'Bending M/C #2', col:'#877BC6'},
+};
+let selectedMachines=[4,3,2,5,1];
+let selectedConfig='CFG_CUSTOM';
 
-let selectedConfig='CFG_4';
+function getActiveConfig(){
+  const machines=MACHINE_ORDER.filter(id=>selectedMachines.includes(id));
+  return {
+    id:'CFG_CUSTOM',
+    title:'Custom Line',
+    badge:`${machines.length}머신`,
+    col:'#6FB6C9',
+    machines,
+    desc:'개별 선택 구성'
+  };
+}
 
 function loadSelectedConfig(){
-  try{const s=localStorage.getItem('bpd_config');if(s)selectedConfig=s;}catch(e){}
+  try{
+    const s=localStorage.getItem('bpd_config_machines');
+    if(s){
+      const parsed=JSON.parse(s);
+      if(Array.isArray(parsed)){
+        selectedMachines=MACHINE_ORDER.filter(id=>parsed.includes(id));
+      }
+    }
+  }catch(e){}
+  if(!selectedMachines.includes(1)) selectedMachines.push(1);
 }
 function saveSelectedConfig(){
-  try{localStorage.setItem('bpd_config',selectedConfig);}catch(e){}
+  try{localStorage.setItem('bpd_config_machines',JSON.stringify(selectedMachines));}catch(e){}
   const b=document.getElementById('cfgSavedBadge');
   if(b){b.style.display='block';setTimeout(()=>{b.style.display='none';},2200);}
 }
@@ -5376,7 +5581,7 @@ function selectConfig(id){
 }
 
 function applyConfigToDashboard(){
-  const cfg=CONFIGS.find(c=>c.id===selectedConfig)||CONFIGS[3];
+  const cfg=getActiveConfig();
   const active=cfg.machines;
 
   [1,2,3,4].forEach(i=>{
@@ -5414,158 +5619,54 @@ function applyConfigToDashboard(){
 }
 
 // ── CFG 카드 초기 생성 여부 플래그 (더 이상 사용 안 함, 호환성 유지) ──
-let _cfgCardsBuilt = false;
-
 function renderCfgCards(){
   const wrap = document.getElementById('cfgCards');
   if(!wrap) return;
+  const cfg=getActiveConfig();
+  wrap.innerHTML=`
+    <div style="background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:800;color:var(--bright)">라인 공정 개별 선택</div>
+        <div style="font-size:9px;color:${cfg.col};font-weight:700">${cfg.badge}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+        ${MACHINE_ORDER.map(id=>{
+          const m=MACHINE_META[id];
+          const checked=selectedMachines.includes(id);
+          const locked=id===1?'disabled':'';
+          return `<label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:7px;border:1px solid ${m.col}44;background:${checked?m.col+'14':'var(--sb)'}">
+            <input type="checkbox" data-mid="${id}" ${checked?'checked':''} ${locked} style="accent-color:${m.col};width:14px;height:14px"/>
+            <span style="font-size:10px;font-weight:700;color:${m.col}">${m.name}</span>
+          </label>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:10px;font-size:9px;color:var(--dim)">Bending M/C(1)은 기본 필수입니다. Bending M/C #2를 추가하면 2대 운용 화면으로 표시됩니다.</div>
+    </div>`;
 
-  const mInfo={
-    1:{col:'#877BC6',n:'Bending M/C'},
-    2:{col:'#C89263',n:'Laser Marking'},
-    3:{col:'#6FB58A',n:'Cutting M/C'},
-    4:{col:'#6FB6C9',n:'이송 로봇'}
-  };
-
-  // ── 항상 DOM 재생성 (리스너 누적 방지: clone으로 교체) ──────
-  // wrap을 clone으로 교체 → 기존 addEventListener 전부 제거
-  const newWrap = wrap.cloneNode(false); // 자식/리스너 없는 빈 복사본
-  wrap.parentNode.replaceChild(newWrap, wrap);
-  const w = newWrap; // 이후 w 사용
-  w.innerHTML = '';
-
-  if(true){  // 항상 실행 (구조 유지)
-
-    CONFIGS.forEach(cfg=>{
-      const card = document.createElement('div');
-      card.dataset.cfgid = cfg.id;
-      card.style.cssText =
-        'border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:9px;'+
-        'cursor:pointer;position:relative;min-height:220px;'+
-        'transition:opacity .25s,filter .25s,border-color .2s,background .2s,box-shadow .2s;';
-
-      // 카드 내용 (pointer-events:none 오버레이로 감싸서 클릭이 card에만 전달)
-      card.innerHTML =
-        // 클릭 차단 방지용 투명 오버레이 (최상단, pointer-events:none)
-        `<div style="position:absolute;inset:0;z-index:10;pointer-events:none;border-radius:10px;"></div>`+
-        // 선택 체크 뱃지
-        `<div class="cfg-check-badge" style="display:none;position:absolute;top:10px;right:12px;
-           width:24px;height:24px;border-radius:50%;background:${cfg.col};
-           align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:900;
-           box-shadow:0 0 8px ${cfg.col};z-index:11;pointer-events:none">✓</div>`+
-        // 헤더
-        `<div style="display:flex;align-items:center;gap:9px;padding-right:28px;pointer-events:none">
-          <div class="cfg-dot" style="width:10px;height:10px;border-radius:50%;
-               background:${cfg.col};flex-shrink:0;pointer-events:none"></div>
-          <div style="flex:1;min-width:0;pointer-events:none">
-            <div style="font-size:12px;font-weight:800;color:var(--bright);
-                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cfg.title}</div>
-            <div style="font-size:8.5px;color:var(--dim);margin-top:1px">${cfg.desc}</div>
-          </div>
-          <span style="font-size:8px;font-weight:700;padding:2px 8px;border-radius:10px;
-            background:${cfg.col}22;color:${cfg.col};border:1px solid ${cfg.col}44;
-            flex-shrink:0;pointer-events:none">${cfg.badge}</span>
-        </div>`+
-        // 머신 프리뷰
-        `<div style="border-radius:6px;overflow:hidden;border:1px solid var(--border);
-             pointer-events:none">
-          ${buildCfgPreview(cfg)}
-        </div>`+
-        // 머신 태그
-        `<div style="display:flex;gap:5px;flex-wrap:wrap;pointer-events:none">
-          ${cfg.machines.map(n=>{
-            const m=mInfo[n];
-            return`<span style="font-size:8px;padding:2px 8px;border-radius:3px;font-weight:700;`+
-                  `background:${m.col}18;color:${m.col};border:1px solid ${m.col}44;pointer-events:none">${m.n}</span>`;
-          }).join('')}
-        </div>`+
-        // 푸터
-        `<div class="cfg-footer-txt" style="font-size:9px;font-weight:700;text-align:center;
-             padding:5px 0;border-top:1px solid var(--border);
-             color:var(--dim);pointer-events:none">클릭하여 이 구성 선택</div>`;
-
-      w.appendChild(card);
+  wrap.querySelectorAll('input[data-mid]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const id=Number(el.dataset.mid);
+      if(el.checked){
+        if(!selectedMachines.includes(id)) selectedMachines.push(id);
+      }else{
+        selectedMachines=selectedMachines.filter(v=>v!==id);
+      }
+      selectedMachines=MACHINE_ORDER.filter(mid=>selectedMachines.includes(mid));
+      _doSelectConfig('CFG_CUSTOM');
     });
-
-    // ── 이벤트 위임: w에 단 1개 클릭 리스너 ────────────────
-    w.addEventListener('click', function(e){
-      const card = e.target.closest('[data-cfgid]');
-      if(!card) return;
-      const id = card.dataset.cfgid;
-      if(id) _doSelectConfig(id);
-    });
-
-    // hover: w에서 위임
-    w.addEventListener('mouseover', function(e){
-      const card = e.target.closest('[data-cfgid]');
-      if(!card || card.dataset.cfgid === selectedConfig) return;
-      card.style.opacity = '0.78';
-      card.style.filter  = 'grayscale(10%) brightness(0.92)';
-    });
-    w.addEventListener('mouseout', function(e){
-      const card = e.target.closest('[data-cfgid]');
-      if(!card || card.dataset.cfgid === selectedConfig) return;
-      _applyCfgCardStyle(card);
-    });
-
-    _cfgCardsBuilt = true;
-  }
-
-  // ── 매번 호출: 선택 상태 업데이트 ─────────────────────────
-  Array.from(w.children).forEach(card => {
-    const id  = card.dataset.cfgid;
-    if(!id) return;
-    const cfg = CONFIGS.find(c=>c.id===id);
-    if(!cfg) return;
-    const sel = id === selectedConfig;
-    _applyCfgCardStyle(card, cfg, sel);
   });
 }
 
 // 카드 스타일 적용 (선택/비선택)
 function _applyCfgCardStyle(card, cfg, sel){
-  if(!cfg){
-    const id = card.dataset.cfgid;
-    cfg = CONFIGS.find(c=>c.id===id);
-    if(!cfg) return;
-    sel = id === selectedConfig;
-  }
-  if(sel){
-    card.style.background  = `linear-gradient(135deg,${cfg.col}22,${cfg.col}08)`;
-    card.style.border      = `2px solid ${cfg.col}`;
-    card.style.opacity     = '1';
-    card.style.filter      = 'none';
-    card.style.boxShadow   = `0 0 20px ${cfg.col}30`;
-    // 체크 뱃지 표시
-    const badge = card.querySelector('.cfg-check-badge');
-    if(badge) badge.style.display='flex';
-    // 푸터 텍스트
-    const footer = card.querySelector('.cfg-footer-txt');
-    if(footer){ footer.style.color=cfg.col; footer.textContent='✓ 현재 구성 — Operation · Dashboard 적용됨'; }
-    // 점 glow
-    const dot = card.querySelector('.cfg-dot');
-    if(dot) dot.style.boxShadow=`0 0 8px ${cfg.col}`;
-  } else {
-    card.style.background  = 'var(--panel2)';
-    card.style.border      = '2px solid var(--border)';
-    card.style.opacity     = '0.38';
-    card.style.filter      = 'grayscale(40%) brightness(0.75)';
-    card.style.boxShadow   = 'none';
-    const badge = card.querySelector('.cfg-check-badge');
-    if(badge) badge.style.display='none';
-    const footer = card.querySelector('.cfg-footer-txt');
-    if(footer){ footer.style.color='var(--dim)'; footer.textContent='클릭하여 이 구성 선택'; }
-    const dot = card.querySelector('.cfg-dot');
-    if(dot) dot.style.boxShadow='none';
-  }
+  return;
 }
 
 // selectConfig의 안전한 래퍼
 function _doSelectConfig(id){
-  selectedConfig = id;
+  selectedConfig = 'CFG_CUSTOM';
   saveSelectedConfig();
-  // 카드 UI 즉시 업데이트
-  renderCfgCards();
+  if(id !== '__NO_RENDER__') renderCfgCards();
   try{ applyConfigToDashboard(); }catch(e){ console.warn('[applyDash]',e); }
   try{ applyConfigToOperation(); }catch(e){ console.warn('[applyOp]',e); }
   try{ applyConfigToComm(); }catch(e){ console.warn('[applyComm]',e); }
@@ -5859,6 +5960,8 @@ function selWorkerPipe(pid){
 const wPipeState={};  // {machId: {el, curX}}
 const W_VBMAP={
   1:'1140 20 420 300',  // Bending M/C — 높이 300으로 확장
+  6:'1140 20 420 300',
+  5:'0 0 360 280',
   2:'780 30 300 250',
   3:'410 30 300 250',
   4:'10 30 330 250'
@@ -5927,10 +6030,10 @@ function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
 // 반드시 updateFlow() 호출 이후에 불러야 innerHTML 충돌 없음
 // ══════════════════════════════════════════════════════════════
 function updateWorkerMachines(step){
-  const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4'};
+  const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById(wMap[i]); if(!el) return;
     el.innerHTML=MSVG[i](step===i);
     const svg=el.closest('svg'); if(!svg) return;
@@ -5939,7 +6042,7 @@ function updateWorkerMachines(step){
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const svg=document.getElementById('opMach'+i); if(!svg) return;
     svg.innerHTML=MSVG[i](step===i);   // MSVG 먼저
     svg.setAttribute('viewBox',W_VBMAP[i]);
@@ -5957,13 +6060,13 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn){
 
   // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
   // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
-  const vbLeft = {1:1150, 2:780, 3:410, 4:10}[machIdx] || 0;
+  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:0}[machIdx] || 0;
   const entryX = vbLeft - PIPE_LEN - 30;   // 화면 왼쪽 바깥
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
 
   const pg = buildWorkerStraightPipe(svg, pipeId, entryX);
 
-  if(machIdx === 1){
+  if(machIdx === 1 || machIdx === 6){
     // 밴딩 머신: 진입 후 shape 애니메이션
     const pipe = PIPE_DATA[opPipeIdx % PIPE_DATA.length];
     const nums = pipe.id.match(/\d+/g);
@@ -6098,9 +6201,9 @@ window.onCSharpMessage = function(msg){
     if(msg.type === 'machineStatus' && msg.data){
       const d = msg.data;
       const _activeMids = getActiveCommMachineIds();
-      ['loader','cutting','laser','bending'].forEach(key=>{
+      ['loader','cutting','laser','robot','bending','bending2'].forEach(key=>{
         const m = d[key]; if(!m) return;
-        const mid = {loader:'LOADER',cutting:'CUTTING',laser:'LASER',bending:'BENDING'}[key];
+        const mid = {loader:'LOADER',cutting:'CUTTING',laser:'LASER',robot:'ROBOT',bending:'BENDING',bending2:'BENDING2'}[key];
         const st  = machSt[mid]; if(!st) return;
         if(!_activeMids.includes(mid)) return;
 
@@ -6180,7 +6283,7 @@ window.onCSharpMessage = function(msg){
       if(st){
         st.lastMsg = response;
         if(isOk){
-          if(cmdType==='START') st.status='RUNNING';
+          if(cmdType==='START') st.status='RUN';
           if(cmdType==='STOP')  st.status='IDLE';
           if(cmdType==='RESET'){st.status='IDLE'; st.alarm=false;}
         }

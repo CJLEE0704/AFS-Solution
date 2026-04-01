@@ -212,7 +212,9 @@ namespace PipeBendingDashboard
                     loaderIp:  "192.168.1.10", loaderPort:  5000,
                     cuttingIp: "192.168.1.11", cuttingPort: 5000,
                     laserIp:   "192.168.1.12", laserPort:   5000,
+                    robotIp:   "192.168.1.14", robotPort:   5000,
                     bendingIp: "192.168.1.13", bendingPort: 5000,
+                    bending2Ip: "192.168.1.15", bending2Port: 5000,
                     pollIntervalMs: 100);
 
                 // ① 머신 상태 수신 → HTML 전달

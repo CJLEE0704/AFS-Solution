@@ -2380,10 +2380,19 @@ function playDashBend(svg, shape, cb){
 }
 
 // 대시보드 머신 시퀀스 (Full Line 기준, 선택 구성 따름)
+function getDashCycleSteps(machines){
+  const steps=[...machines];
+  if(steps.includes(5) && steps.includes(1) && steps.includes(6)){
+    // Robot 이후 Bending #1/#2를 직렬이 아닌 분기처럼 1대만 선택하여 처리
+    const pickedBend = (dashPipeIdx % 2 === 0) ? 1 : 6;
+    return steps.filter(s=>s!==1 && s!==6).concat(pickedBend);
+  }
+  return steps;
+}
 function dashAutoLoop(){
   if(!dashAutoRunning) return;
   const cfg=getActiveConfig();
-  const steps=[...cfg.machines];
+  const steps=getDashCycleSteps(cfg.machines);
   const stepIdx=dashAutoStep % steps.length;
   const n=steps[stepIdx];
   dashAutoStep++;
@@ -2584,19 +2593,27 @@ function flowScaleByCount(n){
 }
 function applyFlowMachineLayout(active){
   const ids = Array.isArray(active) && active.length ? active : [4,3,2,5,1,6];
+  const hasDualBend = ids.includes(1) && ids.includes(6);
   const n = ids.length;
   const left = 145, right = 1415;
   const slotGap = n>1 ? (right-left)/(n-1) : 0;
   const centerY = 170;
   const scale = flowScaleByCount(n);
   const centerMap = {};
+  const centerYMap = {};
 
-  ids.forEach((id, idx)=>{
+  const linearIds = hasDualBend ? ids.filter(id=>id!==6) : ids;
+  const linearN = linearIds.length;
+  const linearGap = linearN>1 ? (right-left)/(linearN-1) : 0;
+
+  linearIds.forEach((id, idx)=>{
     const b = FLOW_MACHINE_BBOX[id]; if(!b) return;
-    const cx = n===1 ? (left+right)/2 : left + slotGap*idx;
+    const cx = linearN===1 ? (left+right)/2 : left + linearGap*idx;
+    const localCY = hasDualBend && id===1 ? (centerY - 70) : centerY;
     const tx = cx - scale*(b.x + b.w/2);
-    const ty = centerY - scale*(b.y + b.h/2);
+    const ty = localCY - scale*(b.y + b.h/2);
     centerMap[id]=cx;
+    centerYMap[id]=localCY;
     const el=document.getElementById('mach'+id);
     if(el){
       el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
@@ -2604,17 +2621,39 @@ function applyFlowMachineLayout(active){
     }
   });
 
+  if(hasDualBend){
+    const b = FLOW_MACHINE_BBOX[6];
+    const bendX = centerMap[1] ?? (linearN===1 ? (left+right)/2 : right);
+    const bend2Y = centerY + 70;
+    const tx = bendX - scale*(b.x + b.w/2);
+    const ty = bend2Y - scale*(b.y + b.h/2);
+    centerMap[6]=bendX;
+    centerYMap[6]=bend2Y;
+    const el=document.getElementById('mach6');
+    if(el){
+      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
+      el.style.display='';
+    }
+  }
+
   [1,2,3,4,5,6].forEach(id=>{
     if(centerMap[id]!==undefined) return;
     const el=document.getElementById('mach'+id);
     if(el) el.style.display='none';
   });
 
-  return { centerMap, activeIds: ids };
+  return { centerMap, centerYMap, activeIds: ids };
 }
-function applyFlowArrowLayout(activeIds, centerMap){
-  const pairs = [];
-  for(let i=0;i<activeIds.length-1;i++) pairs.push([activeIds[i], activeIds[i+1]]);
+function applyFlowArrowLayout(activeIds, centerMap, centerYMap){
+  let pairs = [];
+  const hasDualBend = activeIds.includes(1) && activeIds.includes(6) && activeIds.includes(5);
+  if(hasDualBend){
+    const base = activeIds.filter(id=>id!==6);
+    for(let i=0;i<base.length-1;i++) pairs.push([base[i], base[i+1]]);
+    pairs.push([5,6]);
+  }else{
+    for(let i=0;i<activeIds.length-1;i++) pairs.push([activeIds[i], activeIds[i+1]]);
+  }
   for(let i=1;i<=5;i++){
     const lp = document.querySelector('.a'+i+'p');
     const lh = document.querySelector('.a'+i+'h');
@@ -2627,12 +2666,13 @@ function applyFlowArrowLayout(activeIds, centerMap){
     const [from,to]=pair;
     const x1 = (centerMap[from] ?? 0) + 52;
     const x2 = (centerMap[to] ?? 0) - 52;
-    const y = 190;
+    const y1 = centerYMap[from] ?? 190;
+    const y2 = centerYMap[to] ?? 190;
     lp.setAttribute('x1', String(x1));
-    lp.setAttribute('y1', String(y));
+    lp.setAttribute('y1', String(y1));
     lp.setAttribute('x2', String(x2));
-    lp.setAttribute('y2', String(y));
-    lh.setAttribute('points', `${x2+16},${y} ${x2-2},${y-9} ${x2-2},${y+9}`);
+    lp.setAttribute('y2', String(y2));
+    lh.setAttribute('points', `${x2+16},${y2} ${x2-2},${y2-9} ${x2-2},${y2+9}`);
     lp.style.visibility='visible';
     lh.style.visibility='visible';
   }
@@ -2650,7 +2690,7 @@ function updateFlow(n){
   const cfg=getActiveConfig();
   const active=cfg.machines;
   const flowLayout = applyFlowMachineLayout(active);
-  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
   applyDynamicPipeDwell(flowLayout.centerMap);
 
   [1,2,3,4,5,6].forEach(i=>{
@@ -3181,7 +3221,7 @@ function applyConfigToOperation(){
 
   // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
   const flowLayout = applyFlowMachineLayout(active);
-  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
   applyDynamicPipeDwell(flowLayout.centerMap);
 
   // 대시보드 machList도 업데이트
@@ -5732,7 +5772,7 @@ function applyConfigToDashboard(){
   const cfg=getActiveConfig();
   const active=cfg.machines;
   const flowLayout = applyFlowMachineLayout(active);
-  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
   applyDynamicPipeDwell(flowLayout.centerMap);
 
   [1,2,3,4,5,6].forEach(i=>{

@@ -2601,6 +2601,13 @@ function flowScaleByCount(n){
   const raw = 1.05 - (Math.max(1,n)-1)*0.09;
   return Math.max(0.58, Math.min(1.08, raw));
 }
+function getFlowFrameCenterY(){
+  const svg = document.getElementById('flowSvg');
+  if(!svg) return 190;
+  const vb = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+  if(vb.length===4 && Number.isFinite(vb[3])) return vb[3]*0.53; // 기존보다 조금 아래 기준
+  return 190;
+}
 let FLOW_LAYOUT_STATE = { centerMap:{}, centerYMap:{}, boxMap:{}, activeIds:[], scale:1 };
 function applyFlowMachineLayout(active){
   const ids = Array.isArray(active) && active.length ? active : [4,3,2,5,1,6];
@@ -2608,7 +2615,7 @@ function applyFlowMachineLayout(active){
   const n = ids.length;
   const left = 145, right = 1415;
   const slotGap = n>1 ? (right-left)/(n-1) : 0;
-  const centerY = 170;
+  const centerY = getFlowFrameCenterY();
   const scale = flowScaleByCount(n);
   const centerMap = {};
   const centerYMap = {};
@@ -2621,7 +2628,7 @@ function applyFlowMachineLayout(active){
   linearIds.forEach((id, idx)=>{
     const b = FLOW_MACHINE_BBOX[id]; if(!b) return;
     const cx = linearN===1 ? (left+right)/2 : left + linearGap*idx;
-    const localCY = hasDualBend && id===1 ? (centerY - 70) : centerY;
+    const localCY = centerY;
     const tx = cx - scale*(b.x + b.w/2);
     const ty = localCY - scale*(b.y + b.h/2);
     centerMap[id]=cx;
@@ -2666,7 +2673,7 @@ function applyFlowMachineLayout(active){
     if(el) el.style.display='none';
   });
 
-  const layout = { centerMap, centerYMap, boxMap, activeIds: ids, scale };
+  const layout = { centerMap, centerYMap, boxMap, activeIds: ids, scale, centerY };
   FLOW_LAYOUT_STATE = layout;
   return layout;
 }
@@ -2692,8 +2699,9 @@ function applyFlowArrowLayout(activeIds, centerMap, centerYMap){
     const [from,to]=pair;
     const x1 = (centerMap[from] ?? 0) + 52;
     const x2 = (centerMap[to] ?? 0) - 52;
-    const y1 = centerYMap[from] ?? 190;
-    const y2 = centerYMap[to] ?? 190;
+    const fallbackY = FLOW_LAYOUT_STATE?.centerY || 190;
+    const y1 = centerYMap[from] ?? fallbackY;
+    const y2 = centerYMap[to] ?? fallbackY;
     lp.setAttribute('x1', String(x1));
     lp.setAttribute('y1', String(y1));
     lp.setAttribute('x2', String(x2));

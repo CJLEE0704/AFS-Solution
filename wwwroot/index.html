@@ -2570,25 +2570,88 @@ MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" 
 <line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
 <text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>`;
 
-const FLOW_MACHINE_TRANSFORM = {
-  4:'translate(20 46) scale(0.62) translate(-10 -30)',
-  3:'translate(245 46) scale(0.62) translate(-410 -30)',
-  2:'translate(470 46) scale(0.62) translate(-780 -30)',
-  5:'translate(695 46) scale(0.62) translate(-20 -30)',
-  1:'translate(920 46) scale(0.62) translate(-1150 -30)',
-  6:'translate(1157 46) scale(0.62) translate(-1150 -30)',
+const FLOW_MACHINE_BBOX = {
+  4:{x:10,y:30,w:330,h:280},
+  3:{x:410,y:30,w:300,h:280},
+  2:{x:780,y:30,w:300,h:280},
+  5:{x:20,y:30,w:320,h:220},
+  1:{x:1150,y:30,w:400,h:280},
+  6:{x:1150,y:30,w:400,h:280},
 };
-function applyFlowMachineLayout(){
-  [1,2,3,4,5,6].forEach(i=>{
-    const el=document.getElementById('mach'+i);
-    if(el && FLOW_MACHINE_TRANSFORM[i]) el.setAttribute('transform', FLOW_MACHINE_TRANSFORM[i]);
+function flowScaleByCount(n){
+  const raw = 1.05 - (Math.max(1,n)-1)*0.09;
+  return Math.max(0.58, Math.min(1.08, raw));
+}
+function applyFlowMachineLayout(active){
+  const ids = Array.isArray(active) && active.length ? active : [4,3,2,5,1,6];
+  const n = ids.length;
+  const left = 145, right = 1415;
+  const slotGap = n>1 ? (right-left)/(n-1) : 0;
+  const centerY = 170;
+  const scale = flowScaleByCount(n);
+  const centerMap = {};
+
+  ids.forEach((id, idx)=>{
+    const b = FLOW_MACHINE_BBOX[id]; if(!b) return;
+    const cx = n===1 ? (left+right)/2 : left + slotGap*idx;
+    const tx = cx - scale*(b.x + b.w/2);
+    const ty = centerY - scale*(b.y + b.h/2);
+    centerMap[id]=cx;
+    const el=document.getElementById('mach'+id);
+    if(el){
+      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
+      el.style.display='';
+    }
   });
+
+  [1,2,3,4,5,6].forEach(id=>{
+    if(centerMap[id]!==undefined) return;
+    const el=document.getElementById('mach'+id);
+    if(el) el.style.display='none';
+  });
+
+  return { centerMap, activeIds: ids };
+}
+function applyFlowArrowLayout(activeIds, centerMap){
+  const pairs = [];
+  for(let i=0;i<activeIds.length-1;i++) pairs.push([activeIds[i], activeIds[i+1]]);
+  for(let i=1;i<=5;i++){
+    const lp = document.querySelector('.a'+i+'p');
+    const lh = document.querySelector('.a'+i+'h');
+    const pair = pairs[i-1];
+    if(!lp || !lh || !pair){
+      if(lp) lp.style.visibility='hidden';
+      if(lh) lh.style.visibility='hidden';
+      continue;
+    }
+    const [from,to]=pair;
+    const x1 = (centerMap[from] ?? 0) + 52;
+    const x2 = (centerMap[to] ?? 0) - 52;
+    const y = 190;
+    lp.setAttribute('x1', String(x1));
+    lp.setAttribute('y1', String(y));
+    lp.setAttribute('x2', String(x2));
+    lp.setAttribute('y2', String(y));
+    lh.setAttribute('points', `${x2+16},${y} ${x2-2},${y-9} ${x2-2},${y+9}`);
+    lp.style.visibility='visible';
+    lh.style.visibility='visible';
+  }
+}
+function applyDynamicPipeDwell(centerMap){
+  PIPE_DWELL[4] = Math.round((centerMap[4] ?? 175) - PIPE_LEN/2);
+  PIPE_DWELL[3] = Math.round((centerMap[3] ?? 560) - PIPE_LEN/2);
+  PIPE_DWELL[2] = Math.round((centerMap[2] ?? 930) - PIPE_LEN/2);
+  PIPE_DWELL[5] = Math.round((centerMap[5] ?? 180) - PIPE_LEN/2);
+  PIPE_DWELL[1] = Math.round((centerMap[1] ?? 1350) - PIPE_LEN/2);
+  PIPE_DWELL[6] = Math.round((centerMap[6] ?? 1350) - PIPE_LEN/2);
 }
 
 function updateFlow(n){
   const cfg=getActiveConfig();
   const active=cfg.machines;
-  applyFlowMachineLayout();
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
@@ -2609,12 +2672,6 @@ function updateFlow(n){
   const svg=document.getElementById('flowSvg');
   if(!svg) return;
   svg.classList.remove('step1','step2','step3','step5','step6');
-  void svg.offsetWidth;
-  if(n===3)svg.classList.add('step3');
-  else if(n===2)svg.classList.add('step2');
-  else if(n===5)svg.classList.add('step5');
-  else if(n===1)svg.classList.add('step1');
-  else if(n===6)svg.classList.add('step6');
   const C={4:'#69B8D6',3:'#73C59B',2:'#D39D63',5:'#63AEC9',1:'#9285D4',6:'#9285D4'};
   const L={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
   const sd=document.getElementById('stepDot'); if(sd) sd.style.background=n?C[n]:'var(--dim)';
@@ -3122,30 +3179,10 @@ function applyConfigToOperation(){
     });
   }
 
-  // flowSvg: 비활성 머신 dimming + 비활성 화살표 숨김
-  const arrowMap={
-    // arrow[n] = 머신 n에서 다음 머신으로 가는 화살표 (step n이 active일 때 보임)
-    // a1p: Loader(4)→Cutting(3), a2p: Cutting(3)→Laser(2), a3p: Laser(2)→Bending(1)
-  };
-  // flowSvg 머신 visibility
-  [1,2,3,4,5,6].forEach(i=>{
-    const el=document.getElementById('mach'+i); if(!el) return;
-    if(active.includes(i)){
-      el.style.opacity='1'; el.style.pointerEvents='auto';
-    } else {
-      el.style.opacity='0.07'; el.style.pointerEvents='none';
-    }
-  });
-  // 화살표 라인 visibility: 두 연속 머신이 모두 active일 때만 표시
-  // a1p: 4→3, a2p: 3→2, a3p: 2→5, a4p: 5→1, a5p: 1→6
-  const arrowPairs=[[4,3,'a1p','a1h'],[3,2,'a2p','a2h'],[2,5,'a3p','a3h'],[5,1,'a4p','a4h'],[1,6,'a5p','a5h']];
-  arrowPairs.forEach(([from,to,ap,ah])=>{
-    const apEl=document.querySelector('.'+ap);
-    const ahEl=document.querySelector('.'+ah);
-    const vis=active.includes(from)&&active.includes(to);
-    if(apEl) apEl.style.visibility=vis?'visible':'hidden';
-    if(ahEl) ahEl.style.visibility=vis?'visible':'hidden';
-  });
+  // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
   // 대시보드 machList도 업데이트
   applyConfigToDashboard();
@@ -5694,7 +5731,9 @@ function selectConfig(id){
 function applyConfigToDashboard(){
   const cfg=getActiveConfig();
   const active=cfg.machines;
-  applyFlowMachineLayout();
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
@@ -5713,20 +5752,13 @@ function applyConfigToDashboard(){
     }
   });
 
-  // 화살표(머신 간 연결선)도 활성/비활성 반영
-  // a1p: 4→3, a2p: 3→2, a3p: 2→5, a4p: 5→1, a5p: 1→6
-  const arrowActive={
-    a1p: active.includes(4)&&active.includes(3),
-    a2p: active.includes(3)&&active.includes(2),
-    a3p: active.includes(2)&&active.includes(5),
-    a4p: active.includes(5)&&active.includes(1),
-    a5p: active.includes(1)&&active.includes(6),
-  };
-  Object.entries(arrowActive).forEach(([cls,on])=>{
-    document.querySelectorAll('.'+cls+', .'+cls.replace('p','h')).forEach(el=>{
-      el.style.opacity=on?'':'0.1';
+  // 화살표(머신 간 연결선): 현재 활성 라인 수에 맞춰 가시화/디밍
+  for(let i=1;i<=5;i++){
+    const on = (i-1) < Math.max(0, active.length-1);
+    document.querySelectorAll('.a'+i+'p, .a'+i+'h').forEach(el=>{
+      el.style.opacity = on ? '1' : '0.1';
     });
-  });
+  }
 
   // Machines 패널 업데이트
   initMachList(null);

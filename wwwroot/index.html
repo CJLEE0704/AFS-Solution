@@ -3078,6 +3078,13 @@ function applyConfigToOperation(){
   const grid=document.getElementById('opMachGrid');
   if(grid) grid.style.gridTemplateColumns=`repeat(${n},1fr)`;
 
+  const opB1=document.getElementById('opMachWrap1');
+  const opB2=document.getElementById('opMachWrap6');
+  [opB1,opB2].forEach(el=>{
+    if(!el) return;
+    el.classList.remove('op-bend-span-1','op-bend-span-2');
+  });
+
   // 각 머신 카드: 순서 재정렬 + show/hide
   const ORDER=[4,3,2,5,1,6]; // 기본 DOM 순서
   // active 배열 순서대로 카드를 grid에 재정렬
@@ -3150,11 +3157,15 @@ function applyConfigToOperation(){
 
 function applyConfigToWorkerLayout(active){
   const wMap={4:'wMach4',3:'wMach3',2:'wMach2',5:'wMach5',1:'wMach1',6:'wMach6'};
+  Object.values(wMap).forEach(wid=>{
+    const el=document.getElementById(wid); if(!el) return;
+    el.classList.remove('bend-layout-single','bend-layout-dual');
+  });
+
   Object.entries(wMap).forEach(([id, wid])=>{
     const el=document.getElementById(wid); if(!el) return;
     el.style.display = active.includes(Number(id)) ? 'block' : 'none';
     el.style.flex = '1';
-    el.classList.remove('bend-layout-single','bend-layout-dual');
   });
 
   const wB1=document.getElementById('wMach1');
@@ -3180,8 +3191,11 @@ function applyConfigToWorkerLayout(active){
 
   const opB1=document.getElementById('opMachWrap1');
   const opB2=document.getElementById('opMachWrap6');
-  if(opB1){ opB1.classList.remove('op-bend-span-2'); opB1.classList.add('op-bend-span-1'); }
-  if(opB2){ opB2.classList.remove('op-bend-span-2'); opB2.classList.add('op-bend-span-1'); }
+  [opB1,opB2].forEach(el=>{
+    if(!el) return;
+    el.classList.remove('op-bend-span-1','op-bend-span-2');
+    el.classList.add('op-bend-span-1');
+  });
   if(opB1 && opB2){
     if(hasB1 && !hasB2){
       opB1.classList.remove('op-bend-span-1');
@@ -5545,11 +5559,24 @@ const MACHINE_META={
   1:{name:'Bending M/C', col:'#877BC6'},
   6:{name:'Bending M/C #2', col:'#877BC6'},
 };
-let selectedMachines=[4,3,2,5,1];
+const DEFAULT_MACHINE_SET=[4,3,2,5,1];
+let selectedMachines=[...DEFAULT_MACHINE_SET];
 let selectedConfig='CFG_CUSTOM';
 
+function normalizeSelectedMachines(rawMachines, fallback=DEFAULT_MACHINE_SET){
+  const src = Array.isArray(rawMachines) ? rawMachines : [];
+  const normalized = MACHINE_ORDER.filter(id=>src.includes(id));
+  if(!normalized.includes(1)) normalized.push(1);
+  const uniq = MACHINE_ORDER.filter(id=>normalized.includes(id));
+  if(!uniq.length){
+    return MACHINE_ORDER.filter(id=>fallback.includes(id));
+  }
+  return uniq;
+}
+
 function getActiveConfig(){
-  const machines=MACHINE_ORDER.filter(id=>selectedMachines.includes(id));
+  const machines=normalizeSelectedMachines(selectedMachines);
+  selectedMachines=[...machines];
   return {
     id:'CFG_CUSTOM',
     title:'Custom Line',
@@ -5561,16 +5588,29 @@ function getActiveConfig(){
 }
 
 function loadSelectedConfig(){
+  let mustReset=false;
+  let parsedMachines=null;
   try{
     const s=localStorage.getItem('bpd_config_machines');
-    if(s){
+    if(!s){
+      mustReset=true;
+    }else{
       const parsed=JSON.parse(s);
-      if(Array.isArray(parsed)){
-        selectedMachines=MACHINE_ORDER.filter(id=>parsed.includes(id));
-      }
+      if(Array.isArray(parsed)) parsedMachines=parsed;
+      else mustReset=true;
     }
-  }catch(e){}
-  if(!selectedMachines.includes(1)) selectedMachines.push(1);
+  }catch(e){
+    mustReset=true;
+  }
+
+  selectedMachines=normalizeSelectedMachines(parsedMachines, DEFAULT_MACHINE_SET);
+  const normalizedText=JSON.stringify(selectedMachines);
+  if(!mustReset){
+    try{ mustReset = localStorage.getItem('bpd_config_machines') !== normalizedText; }catch(e){ mustReset=true; }
+  }
+  if(mustReset){
+    try{ localStorage.setItem('bpd_config_machines', normalizedText); }catch(e){}
+  }
 }
 function saveSelectedConfig(){
   try{localStorage.setItem('bpd_config_machines',JSON.stringify(selectedMachines));}catch(e){}
@@ -5708,7 +5748,7 @@ function renderCfgCards(){
       }else{
         selectedMachines=selectedMachines.filter(v=>v!==id);
       }
-      selectedMachines=MACHINE_ORDER.filter(mid=>selectedMachines.includes(mid));
+      selectedMachines=normalizeSelectedMachines(selectedMachines, DEFAULT_MACHINE_SET);
       _doSelectConfig('CFG_CUSTOM');
     });
   });
@@ -5722,11 +5762,14 @@ function _applyCfgCardStyle(card, cfg, sel){
 // selectConfig의 안전한 래퍼
 function _doSelectConfig(id){
   selectedConfig = 'CFG_CUSTOM';
+  selectedMachines=normalizeSelectedMachines(selectedMachines, DEFAULT_MACHINE_SET);
+  console.log('[CFG][before-apply] selectedMachines:', JSON.stringify(selectedMachines));
   saveSelectedConfig();
   if(id !== '__NO_RENDER__') renderCfgCards();
   try{ applyConfigToDashboard(); }catch(e){ console.warn('[applyDash]',e); }
   try{ applyConfigToOperation(); }catch(e){ console.warn('[applyOp]',e); }
   try{ applyConfigToComm(); }catch(e){ console.warn('[applyComm]',e); }
+  console.log('[CFG][after-apply] selectedMachines:', JSON.stringify(selectedMachines));
 
   // ── C#에 활성 머신 목록 전송 → 비활성 머신 연결 해제 ──
   _notifyCSharpActiveMachines();

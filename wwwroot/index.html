@@ -204,8 +204,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 .step-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .step-lbl{font-size:15px;font-weight:700;color:var(--bright)}
 .weekly-panel{background:linear-gradient(155deg,var(--hero-a),var(--hero-b));border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;padding:10px 10px 7px;overflow:hidden;box-shadow:var(--shadow-soft)}
-.weekly-ttl{font-size:13px;font-weight:700;color:var(--text);letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
-.weekly-sub{font-size:10px;color:var(--cyan);margin:2px 0 6px;flex-shrink:0}
+.weekly-ttl{font-size:15px;font-weight:700;color:var(--text);letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
+.weekly-sub{font-size:12px;color:var(--cyan);margin:2px 0 6px;flex-shrink:0}
 #weeklySvg{width:100%;flex:1;min-height:0;display:block}
 @keyframes dotBlink{0%,100%{opacity:1}50%{opacity:.15}}
 @keyframes startPulse{0%,100%{box-shadow:0 0 0 0 rgba(105,184,214,.5)}70%{box-shadow:0 0 0 12px rgba(105,184,214,0)}}
@@ -629,7 +629,7 @@ body::before{
 }
 .pt,.weekly-ttl,.dim-title{
   position:relative;padding-left:11px;
-  font-size:9px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;
+  font-size:11px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;
   color:color-mix(in srgb, var(--dim) 48%, var(--bright) 52%);
 }
 .pt::before,.weekly-ttl::before,.dim-title::before{
@@ -637,7 +637,7 @@ body::before{
   background:color-mix(in srgb, var(--cyan) 74%, var(--bright) 26%);
   box-shadow:0 0 0 4px color-mix(in srgb, var(--cg) 72%, transparent 28%);
 }
-.weekly-sub{font-size:9px;letter-spacing:.05em}
+.weekly-sub{font-size:11px;letter-spacing:.05em}
 .mc-card,.pc,.proj-folder,.iso-wrap,.dim-panel,.theme-toggle,.drop-box{
   border-radius:12px;
   border:1px solid color-mix(in srgb, var(--border) 80%, var(--line-strong) 20%);
@@ -828,7 +828,7 @@ body::before{
           <polygon class="ah a5h" points="1190,190 1172,181 1172,199"/>
           <g id="mach4"></g><g id="mach3"></g><g id="mach2"></g><g id="mach5"></g><g id="mach1"></g><g id="mach6"></g>
           <!-- 컨베이어 라인 (머신 작업 높이 y=143) -->
-          <line x1="0" y1="167" x2="1560" y2="167" stroke="#31475F" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.5"/>
+          <line id="flowConveyorLine" x1="0" y1="167" x2="1560" y2="167" stroke="#31475F" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.5"/>
           <g id="ptg">
             <rect x="58" y="143" width="240" height="24" rx="5" fill="#223142"/>
             <rect x="60" y="145" width="236" height="20" rx="4" fill="url(#pipeG)" filter="url(#gPipe)"/>
@@ -2616,6 +2616,7 @@ function applyFlowMachineLayout(active){
   const left = 145, right = 1415;
   const slotGap = n>1 ? (right-left)/(n-1) : 0;
   const centerY = getFlowFrameCenterY();
+  syncFlowConveyorY(centerY);
   const scale = flowScaleByCount(n);
   const centerMap = {};
   const centerYMap = {};
@@ -3420,8 +3421,10 @@ function setOpLog(msg){const el=document.getElementById('opLog');if(el){el.textC
 // ═══════════════════════════════════════════════════════════════
 
 // 컨베이어 레이어 상수 (flowSvg 기준)
-// viewBox: 0 0 1560 380  / 머신 작업 높이: y≈143~167 (center 155)
-const CONV_Y=143, CONV_H=24;   // 배관 top y, 두께 — 머신 작업 라인과 동일
+// viewBox: 0 0 1560 380
+const CONV_H=24;               // 배관 두께
+let CONV_CENTER_Y=155;         // 배관 중심선 y (동적 보정)
+let CONV_Y=CONV_CENTER_Y-CONV_H/2; // 배관 top y
 const PIPE_LEN=240;            // 배관 길이
 // 각 머신에서 배관 정지 위치 (left-edge x)
 // M4(Loader):x=10-340, M3(Cutting):x=410-710, M2(Laser):x=780-1080, M1(Bending):x=1150-1550
@@ -3429,6 +3432,23 @@ const PIPE_DWELL={start:-270, 4:58, 3:440, 2:808, 5:980, 1:1168, 6:1210};
 
 let pipeEl=null;
 let pipeCurX=-270;
+
+function syncFlowConveyorY(centerY){
+  CONV_CENTER_Y = centerY;
+  CONV_Y = CONV_CENTER_Y - CONV_H/2;
+
+  const line=document.getElementById('flowConveyorLine');
+  if(line){
+    line.setAttribute('y1', String(CONV_CENTER_Y));
+    line.setAttribute('y2', String(CONV_CENTER_Y));
+  }
+
+  const ptg=document.getElementById('ptg');
+  if(ptg){
+    const delta = CONV_CENTER_Y - 155; // 기존 기본 중심선(155) 기준 이동
+    ptg.setAttribute('transform', `translate(0,${delta.toFixed(2)})`);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────
 // buildBendPath — SHAPES 배열의 pts/segs와 정확히 일치하는 경로

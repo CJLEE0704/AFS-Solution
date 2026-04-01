@@ -218,8 +218,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 #flowSvg.step3 .a1h{fill:#69B8D6;filter:drop-shadow(0 0 6px #69B8D6);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
 #flowSvg.step2 .a2p{opacity:1;stroke:#73C59B;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #73C59B)}
 #flowSvg.step2 .a2h{fill:#73C59B;filter:drop-shadow(0 0 6px #73C59B);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
-#flowSvg.step1 .a3p{opacity:1;stroke:#D39D63;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #D39D63)}
-#flowSvg.step1 .a3h{fill:#D39D63;filter:drop-shadow(0 0 6px #D39D63);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step5 .a3p{opacity:1;stroke:#63AEC9;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #63AEC9)}
+#flowSvg.step5 .a3h{fill:#63AEC9;filter:drop-shadow(0 0 6px #63AEC9);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step1 .a4p{opacity:1;stroke:#9285D4;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #9285D4)}
+#flowSvg.step1 .a4h{fill:#9285D4;filter:drop-shadow(0 0 6px #9285D4);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step6 .a5p{opacity:1;stroke:#9285D4;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #9285D4)}
+#flowSvg.step6 .a5h{fill:#9285D4;filter:drop-shadow(0 0 6px #9285D4);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
 
 /* ── BOT ── */
 .bot{flex:1;display:grid;grid-template-columns:300px 560px 1fr;gap:5px;min-height:0}
@@ -812,13 +816,17 @@ body::before{
             <filter id="gPipe"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
           <rect width="1560" height="380" fill="url(#sg)"/>
-          <line class="ap a1p" x1="340" y1="190" x2="390" y2="190"/>
-          <polygon class="ah a1h" points="406,190 388,181 388,199"/>
-          <line class="ap a2p" x1="710" y1="190" x2="760" y2="190"/>
-          <polygon class="ah a2h" points="776,190 758,181 758,199"/>
-          <line class="ap a3p" x1="1080" y1="190" x2="1130" y2="190"/>
-          <polygon class="ah a3h" points="1146,190 1128,181 1128,199"/>
-          <g id="mach4"></g><g id="mach3"></g><g id="mach2"></g><g id="mach1"></g>
+          <line class="ap a1p" x1="225" y1="190" x2="265" y2="190"/>
+          <polygon class="ah a1h" points="281,190 263,181 263,199"/>
+          <line class="ap a2p" x1="448" y1="190" x2="488" y2="190"/>
+          <polygon class="ah a2h" points="504,190 486,181 486,199"/>
+          <line class="ap a3p" x1="673" y1="190" x2="713" y2="190"/>
+          <polygon class="ah a3h" points="729,190 711,181 711,199"/>
+          <line class="ap a4p" x1="897" y1="190" x2="937" y2="190"/>
+          <polygon class="ah a4h" points="953,190 935,181 935,199"/>
+          <line class="ap a5p" x1="1134" y1="190" x2="1174" y2="190"/>
+          <polygon class="ah a5h" points="1190,190 1172,181 1172,199"/>
+          <g id="mach4"></g><g id="mach3"></g><g id="mach2"></g><g id="mach5"></g><g id="mach1"></g><g id="mach6"></g>
           <!-- 컨베이어 라인 (머신 작업 높이 y=143) -->
           <line x1="0" y1="167" x2="1560" y2="167" stroke="#31475F" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.5"/>
           <g id="ptg">
@@ -2410,7 +2418,7 @@ function dashAutoLoop(){
   moveDashPipeTo(targetX, travelDur, ()=>{
     if(!dashAutoRunning) return;
 
-    if(n===1){
+    if(n===1 || n===6){
       // 밴딩 머신: 직선 배관 페이드아웃 후 구부러진 배관 그리기
       const dashSvg=document.getElementById('flowSvg');
       if(dashPipeEl){
@@ -2562,9 +2570,25 @@ MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" 
 <line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
 <text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>`;
 
+const FLOW_MACHINE_TRANSFORM = {
+  4:'translate(20 46) scale(0.62) translate(-10 -30)',
+  3:'translate(245 46) scale(0.62) translate(-410 -30)',
+  2:'translate(470 46) scale(0.62) translate(-780 -30)',
+  5:'translate(695 46) scale(0.62) translate(-20 -30)',
+  1:'translate(920 46) scale(0.62) translate(-1150 -30)',
+  6:'translate(1157 46) scale(0.62) translate(-1150 -30)',
+};
+function applyFlowMachineLayout(){
+  [1,2,3,4,5,6].forEach(i=>{
+    const el=document.getElementById('mach'+i);
+    if(el && FLOW_MACHINE_TRANSFORM[i]) el.setAttribute('transform', FLOW_MACHINE_TRANSFORM[i]);
+  });
+}
+
 function updateFlow(n){
   const cfg=getActiveConfig();
   const active=cfg.machines;
+  applyFlowMachineLayout();
 
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
@@ -2584,11 +2608,13 @@ function updateFlow(n){
 
   const svg=document.getElementById('flowSvg');
   if(!svg) return;
-  svg.classList.remove('step1','step2','step3');
+  svg.classList.remove('step1','step2','step3','step5','step6');
   void svg.offsetWidth;
   if(n===3)svg.classList.add('step3');
   else if(n===2)svg.classList.add('step2');
+  else if(n===5)svg.classList.add('step5');
   else if(n===1)svg.classList.add('step1');
+  else if(n===6)svg.classList.add('step6');
   const C={4:'#69B8D6',3:'#73C59B',2:'#D39D63',5:'#63AEC9',1:'#9285D4',6:'#9285D4'};
   const L={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
   const sd=document.getElementById('stepDot'); if(sd) sd.style.background=n?C[n]:'var(--dim)';
@@ -3102,7 +3128,7 @@ function applyConfigToOperation(){
     // a1p: Loader(4)→Cutting(3), a2p: Cutting(3)→Laser(2), a3p: Laser(2)→Bending(1)
   };
   // flowSvg 머신 visibility
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
     if(active.includes(i)){
       el.style.opacity='1'; el.style.pointerEvents='auto';
@@ -3111,8 +3137,8 @@ function applyConfigToOperation(){
     }
   });
   // 화살표 라인 visibility: 두 연속 머신이 모두 active일 때만 표시
-  // a1p: 4→3, a2p: 3→2, a3p: 2→1
-  const arrowPairs=[[4,3,'a1p','a1h'],[3,2,'a2p','a2h'],[2,1,'a3p','a3h']];
+  // a1p: 4→3, a2p: 3→2, a3p: 2→5, a4p: 5→1, a5p: 1→6
+  const arrowPairs=[[4,3,'a1p','a1h'],[3,2,'a2p','a2h'],[2,5,'a3p','a3h'],[5,1,'a4p','a4h'],[1,6,'a5p','a5h']];
   arrowPairs.forEach(([from,to,ap,ah])=>{
     const apEl=document.querySelector('.'+ap);
     const ahEl=document.querySelector('.'+ah);
@@ -5668,8 +5694,9 @@ function selectConfig(id){
 function applyConfigToDashboard(){
   const cfg=getActiveConfig();
   const active=cfg.machines;
+  applyFlowMachineLayout();
 
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
     if(active.includes(i)){
       // ── 활성 머신: 정상 표시, 애니메이션 있음 ──
@@ -5687,11 +5714,13 @@ function applyConfigToDashboard(){
   });
 
   // 화살표(머신 간 연결선)도 활성/비활성 반영
-  // a1p: Loader→Cutting(4→3), a2p: Cutting→Laser(3→2), a3p: Laser→Bending(2→1)
+  // a1p: 4→3, a2p: 3→2, a3p: 2→5, a4p: 5→1, a5p: 1→6
   const arrowActive={
     a1p: active.includes(4)&&active.includes(3),
     a2p: active.includes(3)&&active.includes(2),
-    a3p: active.includes(2)&&active.includes(1),
+    a3p: active.includes(2)&&active.includes(5),
+    a4p: active.includes(5)&&active.includes(1),
+    a5p: active.includes(1)&&active.includes(6),
   };
   Object.entries(arrowActive).forEach(([cls,on])=>{
     document.querySelectorAll('.'+cls+', .'+cls.replace('p','h')).forEach(el=>{

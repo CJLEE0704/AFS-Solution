@@ -3230,6 +3230,14 @@ function formatPipeTrace(pipeIdx){
 function updateLoaderReadyVisual(){
   const badge=document.getElementById('wm4badge');
   if(!badge) return;
+  const loaderActive = getActiveSteps().includes(4);
+  if(!loaderActive){
+    badge.style.background = '#6B728033';
+    badge.style.color = '#9CA3AF';
+    badge.style.borderColor = '#6B728055';
+    badge.textContent = 'Auto Loader (비활성)';
+    return;
+  }
   const ready = loaderBufferCount > 0;
   badge.style.background = ready ? '#6FB58A44' : '#6FB6C930';
   badge.style.color = ready ? '#6FB58A' : '#6FB6C9';
@@ -3521,6 +3529,10 @@ function scheduleLoaderPrefetch(){
   loaderPrefetchTimer = setTimeout(()=>{
     loaderPrefetchTimer = null;
     if(!processRunning) return;
+    if(!getActiveSteps().includes(4)){
+      updateLoaderReadyVisual();
+      return;
+    }
     if(loaderBufferCount < LOADER_BUFFER_MAX){
       loaderBufferCount++;
       appendPipeTrace(nextPipeFeedIdx, `Loader Ready(${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
@@ -3585,6 +3597,7 @@ function runPipelineTick(){
   if(!processRunning) return;
   const active = getActiveSteps();
   if(active.length===0) return;
+  const entryStep = active[0];
 
   // 1) 처리 시간 감소
   active.forEach(s=>{
@@ -3630,11 +3643,11 @@ function runPipelineTick(){
   }
 
   // 3) Loader 투입 (지속 공급)
-  if(active.includes(4) && !stageSlots[4]){
-    stageSlots[4] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(4) };
+  if(entryStep && !stageSlots[entryStep]){
+    stageSlots[entryStep] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(entryStep) };
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
-    appendPipeTrace(nextPipeFeedIdx, 'Loader 투입');
-    setOpLog(`📥 Loader 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
+    appendPipeTrace(nextPipeFeedIdx, `${stageName(entryStep)} 투입`);
+    setOpLog(`📥 ${stageName(entryStep)} 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
     nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
   }
 

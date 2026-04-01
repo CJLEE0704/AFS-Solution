@@ -371,6 +371,10 @@ body{transition:background .28s ease,color .28s ease}
 .worker-mach.cutting{background:var(--cutting-bg)}
 .worker-mach.laser{background:var(--laser-bg)}
 .worker-mach.bending{background:var(--bending-bg)}
+.bend-layout-single{flex:1.8 !important;min-height:120px !important}
+.bend-layout-dual{flex:1 !important;min-height:0 !important}
+.op-bend-span-2{grid-column:span 2 !important}
+.op-bend-span-1{grid-column:span 1 !important}
 .sett-hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));box-shadow:var(--shadow-soft)}
 .theme-pref-card{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border:1px solid var(--border2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-soft);flex-shrink:0}
 .theme-pref-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -976,9 +980,17 @@ body::before{
             <svg id="opMach2" viewBox="780 30 300 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#C89263">Laser Marking</div>
           </div>
-          <div id="opMachWrap1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap1" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach1" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
-            <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C</div>
+            <div id="opBendBadge1" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C</div>
+          </div>
+          <div id="opMachWrap6" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+            <svg id="opMach6" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
+            <div id="opBendBadge6" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C #2</div>
+          </div>
+          <div id="opMachWrap5" style="background:#102235;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+            <svg id="opMach5" viewBox="0 0 360 280" style="width:100%;height:100%"></svg>
+            <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#63AEC9">Moving Robot</div>
           </div>
           <div id="opMachWrap6" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach6" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
@@ -1360,7 +1372,7 @@ body::before{
       </div>
 
       <!-- RIGHT: 머신 세로 배치 -->
-      <div style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden">
+      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden">
         <div id="wMach4" class="worker-mach loader" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 330 280" style="width:100%;height:100%"><g id="wm4"></g></svg>
           <div id="wm4badge" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#6FB6C930;color:#6FB6C9;font-weight:700;border:1px solid #6FB6C944">Auto Loader</div>
@@ -1379,7 +1391,11 @@ body::before{
         </div>
         <div id="wMach1" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 400 280" style="width:100%;height:100%"><g id="wm1"></g></svg>
-          <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C</div>
+          <div id="wmBendBadge1" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C</div>
+        </div>
+        <div id="wMach6" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
+          <svg viewBox="0 0 400 280" style="width:100%;height:100%"><g id="wm6"></g></svg>
+          <div id="wmBendBadge6" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#877BC630;color:#877BC6;font-weight:700;border:1px solid #877BC644">Bending M/C #2</div>
         </div>
         <div id="wMach6" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 400 280" style="width:100%;height:100%"><g id="wm6"></g></svg>
@@ -3106,6 +3122,7 @@ function applyConfigToWorkerLayout(active){
     const el=document.getElementById(wid); if(!el) return;
     el.style.display = active.includes(Number(id)) ? 'block' : 'none';
     el.style.flex = '1';
+    el.classList.remove('bend-layout-single','bend-layout-dual');
   });
 
   const wB1=document.getElementById('wMach1');
@@ -3116,39 +3133,93 @@ function applyConfigToWorkerLayout(active){
     if(hasB1 && hasB2){
       wB1.style.display='block';
       wB2.style.display='block';
-      wB1.style.flex='1';
-      wB2.style.flex='1';
-      wB1.style.minHeight='0';
-      wB2.style.minHeight='0';
+      wB1.classList.add('bend-layout-dual');
+      wB2.classList.add('bend-layout-dual');
     }else if(hasB1 && !hasB2){
       wB1.style.display='block';
       wB2.style.display='none';
-      wB1.style.flex='1.8';
-      wB1.style.minHeight='120px';
+      wB1.classList.add('bend-layout-single');
     }else if(!hasB1 && hasB2){
       wB1.style.display='none';
       wB2.style.display='block';
-      wB2.style.flex='1.8';
-      wB2.style.minHeight='120px';
+      wB2.classList.add('bend-layout-single');
     }
   }
 
   const opB1=document.getElementById('opMachWrap1');
   const opB2=document.getElementById('opMachWrap6');
-  if(opB1) opB1.style.gridColumn='span 1';
-  if(opB2) opB2.style.gridColumn='span 1';
+  if(opB1){ opB1.classList.remove('op-bend-span-2'); opB1.classList.add('op-bend-span-1'); }
+  if(opB2){ opB2.classList.remove('op-bend-span-2'); opB2.classList.add('op-bend-span-1'); }
   if(opB1 && opB2){
     if(hasB1 && !hasB2){
-      opB1.style.gridColumn='span 2';
+      opB1.classList.remove('op-bend-span-1');
+      opB1.classList.add('op-bend-span-2');
     }else if(!hasB1 && hasB2){
-      opB2.style.gridColumn='span 2';
+      opB2.classList.remove('op-bend-span-1');
+      opB2.classList.add('op-bend-span-2');
     }
   }
 }
 
 const STEP_LABEL={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
-const STEP_DUR={4:2200,3:3800,2:2800,5:1800,1:6000,6:6000};
+// 공정 시간(밀리초): 현장 체감에 맞춘 기본값 + 소폭 랜덤 편차
+const STEP_DUR={4:10000,3:60000,2:30000,5:10000,1:120000,6:120000};
+const STEP_DUR_RANGE={
+  4:[9000,10000],      // Loader (10초 이내)
+  3:[55000,65000],     // Cutting (60초 내외)
+  2:[25000,35000],     // Marking (30초 이내)
+  5:[9000,10000],      // Moving Robot (10초 이내)
+  1:[100000,120000],   // Bending #1 (120초 이내)
+  6:[100000,120000]    // Bending #2 (120초 이내)
+};
 const STEP_COL={4:'#6FB6C9',3:'#6FB58A',2:'#C89263',5:'#63AEC9',1:'#877BC6',6:'#877BC6'};
+
+function pickStepDuration(step){
+  const range = STEP_DUR_RANGE[step];
+  if(!range) return STEP_DUR[step] || 2200;
+  const [min,max] = range;
+  return Math.floor(min + Math.random() * (max - min + 1));
+}
+const PIPE_TRACE = new Map();
+const PIPE_TRACE_MAX = 10;
+function appendPipeTrace(pipeIdx, message){
+  const pid = PIPE_DATA[pipeIdx % PIPE_DATA.length].id;
+  const rows = PIPE_TRACE.get(pid) || [];
+  rows.push(message);
+  while(rows.length > PIPE_TRACE_MAX) rows.shift();
+  PIPE_TRACE.set(pid, rows);
+}
+function formatPipeTrace(pipeIdx){
+  const pid = PIPE_DATA[pipeIdx % PIPE_DATA.length].id;
+  const rows = PIPE_TRACE.get(pid) || [];
+  if(rows.length===0) return '';
+  return ` | ${pid} 이력: ${rows.join(' → ')}`;
+}
+function updateLoaderReadyVisual(){
+  const badge=document.getElementById('wm4badge');
+  if(!badge) return;
+  const ready = loaderBufferCount > 0;
+  badge.style.background = ready ? '#6FB58A44' : '#6FB6C930';
+  badge.style.color = ready ? '#6FB58A' : '#6FB6C9';
+  badge.style.borderColor = ready ? '#6FB58A77' : '#6FB6C944';
+  badge.textContent = ready ? `Auto Loader ● Ready (${loaderBufferCount})` : 'Auto Loader';
+}
+function updateBendingIndependentVisual(){
+  [1,6].forEach(id=>{
+    const active = !!stageSlots[id];
+    const wBadge = document.getElementById(`wmBendBadge${id}`);
+    const oBadge = document.getElementById(`opBendBadge${id}`);
+    if(wBadge){
+      wBadge.style.background = active ? '#877BC655' : '#877BC630';
+      wBadge.style.borderColor = active ? '#9D90E6AA' : '#877BC644';
+      wBadge.textContent = id===1 ? `Bending M/C${active?' ● RUN':''}` : `Bending M/C #2${active?' ● RUN':''}`;
+    }
+    if(oBadge){
+      oBadge.style.color = active ? '#B3A7F2' : '#877BC6';
+      oBadge.textContent = id===1 ? `Bending M/C${active?' ● RUN':''}` : `Bending M/C #2${active?' ● RUN':''}`;
+    }
+  });
+}
 
 function setStartBtn(running){const btn=document.getElementById('startBtn'),txt=document.getElementById('startBtnTxt');if(!btn)return;btn.className='start-btn '+(running?'running':'idle');txt.textContent=running?'⏹ STOP':'▶ START';}
 function setEmergBtn(armed){const btn=document.getElementById('emergBtn');if(btn){btn.style.animation=armed?'startPulseRed .6s infinite':'none';}}
@@ -3420,7 +3491,9 @@ function scheduleLoaderPrefetch(){
     if(!processRunning) return;
     if(loaderBufferCount < LOADER_BUFFER_MAX){
       loaderBufferCount++;
+      appendPipeTrace(nextPipeFeedIdx, `Loader Ready(${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
       setOpLog(`↻ [Loader M/C] 다음 배관 사전 준비 완료 (버퍼 ${loaderBufferCount}/${LOADER_BUFFER_MAX})`);
+      updateLoaderReadyVisual();
     }
     if(loaderBufferCount < LOADER_BUFFER_MAX){
       scheduleLoaderPrefetch();
@@ -3443,8 +3516,15 @@ function chooseReadyBending(active){
   const idle = cands.filter(s=>!stageSlots[s]);
   if(idle.length===1) return idle[0];
   if(idle.length===2){
-    // 교대 분배
+    // 양쪽 모두 비어있으면 교대 분배
     return (cycleCount % 2 === 0) ? 1 : 6;
+  }
+  // 둘 다 동작 중이면 남은 시간이 더 짧은 장비 우선
+  if(cands.length===2){
+    const [a,b] = cands;
+    const ra = stageSlots[a]?.remain ?? Number.MAX_SAFE_INTEGER;
+    const rb = stageSlots[b]?.remain ?? Number.MAX_SAFE_INTEGER;
+    if(ra !== rb) return ra < rb ? a : b;
   }
   return null;
 }
@@ -3465,6 +3545,8 @@ function updatePipelineVisual(){
     setDashStatus(false,'대기 중');
     setOpStatus(false,'대기 중');
   }
+  updateLoaderReadyVisual();
+  updateBendingIndependentVisual();
 }
 
 function runPipelineTick(){
@@ -3488,7 +3570,8 @@ function runPipelineTick(){
     if(s===1 || s===6){
       cycleCount++;
       const c=document.getElementById('opCycles'); if(c) c.textContent=cycleCount;
-      setOpLog(`✅ 배관 ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id} 완료 (${stageName(s)})`);
+      appendPipeTrace(slot.pipeIdx, `${stageName(s)} 완료`);
+      setOpLog(`✅ 배관 ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id} 완료 (${stageName(s)})${formatPipeTrace(slot.pipeIdx)}`);
       stageSlots[s]=null;
       continue;
     }
@@ -3497,9 +3580,10 @@ function runPipelineTick(){
     if(s===5){
       const target = chooseReadyBending(active);
       if(target && !stageSlots[target]){
-        stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: STEP_DUR[target] || 6000 };
+        stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
-        setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}`);
+        appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
+        setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}${formatPipeTrace(slot.pipeIdx)}`);
       }
       continue;
     }
@@ -3507,16 +3591,18 @@ function runPipelineTick(){
     // 일반 다음 공정 이동
     const next = active[i+1];
     if(next && !stageSlots[next]){
-      stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: STEP_DUR[next] || 2200 };
+      stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
+      appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
       stageSlots[s] = null;
     }
   }
 
   // 3) Loader 투입 (지속 공급)
   if(active.includes(4) && !stageSlots[4]){
-    stageSlots[4] = { pipeIdx: nextPipeFeedIdx, remain: STEP_DUR[4] || 2200 };
+    stageSlots[4] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(4) };
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
-    setOpLog(`📥 Loader 투입: ${pid}`);
+    appendPipeTrace(nextPipeFeedIdx, 'Loader 투입');
+    setOpLog(`📥 Loader 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
     nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
   }
 
@@ -3534,6 +3620,8 @@ function stopPipelineMode(){
   clearInterval(pipelineTimer);
   pipelineTimer = null;
   initPipelineSlots();
+  updateBendingIndependentVisual();
+  updateLoaderReadyVisual();
 }
 
 function runStep(n){
@@ -3559,7 +3647,9 @@ function handleStart(){
     syncRunningLock(false);
     stopLoaderPrefetch();
     loaderBufferCount = 0;
+    PIPE_TRACE.clear();
     stopPipelineMode();
+    updateLoaderReadyVisual();
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -3578,9 +3668,11 @@ function handleStart(){
     const steps=getActiveSteps();
     const cfg=getActiveConfig();
     setOpLog(`▶ [${cfg.title}] 라인 가동 — ${PIPE_DATA[opPipeIdx].id} 투입 시작`);
+    PIPE_TRACE.clear();
     loaderBufferCount = 0;
     stopLoaderPrefetch();
     startPipelineMode(opPipeIdx);
+    updateLoaderReadyVisual();
   }
 }
 
@@ -3716,6 +3808,9 @@ function handleEmergency(){
   const ptg=document.getElementById('ptg');
   if(ptg){ptg.style.transition='opacity 0.5s';ptg.style.opacity='1';}
   updateWorkerMachines(0); syncWorkerBtn(false);
+  PIPE_TRACE.clear();
+  loaderBufferCount = 0;
+  updateLoaderReadyVisual();
   stopPipelineMode();
   syncRunningLock(false);  // ← 비상 정지 시 잠금 해제
 }

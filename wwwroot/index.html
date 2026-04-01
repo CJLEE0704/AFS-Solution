@@ -204,8 +204,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 .step-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .step-lbl{font-size:15px;font-weight:700;color:var(--bright)}
 .weekly-panel{background:linear-gradient(155deg,var(--hero-a),var(--hero-b));border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;padding:10px 10px 7px;overflow:hidden;box-shadow:var(--shadow-soft)}
-.weekly-ttl{font-size:13px;font-weight:700;color:var(--text);letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
-.weekly-sub{font-size:10px;color:var(--cyan);margin:2px 0 6px;flex-shrink:0}
+.weekly-ttl{font-size:15px;font-weight:700;color:var(--text);letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
+.weekly-sub{font-size:12px;color:var(--cyan);margin:2px 0 6px;flex-shrink:0}
 #weeklySvg{width:100%;flex:1;min-height:0;display:block}
 @keyframes dotBlink{0%,100%{opacity:1}50%{opacity:.15}}
 @keyframes startPulse{0%,100%{box-shadow:0 0 0 0 rgba(105,184,214,.5)}70%{box-shadow:0 0 0 12px rgba(105,184,214,0)}}
@@ -218,8 +218,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 #flowSvg.step3 .a1h{fill:#69B8D6;filter:drop-shadow(0 0 6px #69B8D6);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
 #flowSvg.step2 .a2p{opacity:1;stroke:#73C59B;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #73C59B)}
 #flowSvg.step2 .a2h{fill:#73C59B;filter:drop-shadow(0 0 6px #73C59B);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
-#flowSvg.step1 .a3p{opacity:1;stroke:#D39D63;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #D39D63)}
-#flowSvg.step1 .a3h{fill:#D39D63;filter:drop-shadow(0 0 6px #D39D63);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step5 .a3p{opacity:1;stroke:#63AEC9;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #63AEC9)}
+#flowSvg.step5 .a3h{fill:#63AEC9;filter:drop-shadow(0 0 6px #63AEC9);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step1 .a4p{opacity:1;stroke:#9285D4;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #9285D4)}
+#flowSvg.step1 .a4h{fill:#9285D4;filter:drop-shadow(0 0 6px #9285D4);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
+#flowSvg.step6 .a5p{opacity:1;stroke:#9285D4;stroke-width:5;stroke-dasharray:80;stroke-dashoffset:80;animation:drawAH 1.4s ease-out forwards,blinkP 1.1s 1.45s infinite;filter:drop-shadow(0 0 6px #9285D4)}
+#flowSvg.step6 .a5h{fill:#9285D4;filter:drop-shadow(0 0 6px #9285D4);animation:showH 1.4s forwards,blinkP 1.1s 1.45s infinite}
 
 /* ── BOT ── */
 .bot{flex:1;display:grid;grid-template-columns:300px 560px 1fr;gap:5px;min-height:0}
@@ -625,7 +629,7 @@ body::before{
 }
 .pt,.weekly-ttl,.dim-title{
   position:relative;padding-left:11px;
-  font-size:9px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;
+  font-size:11px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;
   color:color-mix(in srgb, var(--dim) 48%, var(--bright) 52%);
 }
 .pt::before,.weekly-ttl::before,.dim-title::before{
@@ -633,7 +637,7 @@ body::before{
   background:color-mix(in srgb, var(--cyan) 74%, var(--bright) 26%);
   box-shadow:0 0 0 4px color-mix(in srgb, var(--cg) 72%, transparent 28%);
 }
-.weekly-sub{font-size:9px;letter-spacing:.05em}
+.weekly-sub{font-size:11px;letter-spacing:.05em}
 .mc-card,.pc,.proj-folder,.iso-wrap,.dim-panel,.theme-toggle,.drop-box{
   border-radius:12px;
   border:1px solid color-mix(in srgb, var(--border) 80%, var(--line-strong) 20%);
@@ -812,15 +816,19 @@ body::before{
             <filter id="gPipe"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
           <rect width="1560" height="380" fill="url(#sg)"/>
-          <line class="ap a1p" x1="340" y1="190" x2="390" y2="190"/>
-          <polygon class="ah a1h" points="406,190 388,181 388,199"/>
-          <line class="ap a2p" x1="710" y1="190" x2="760" y2="190"/>
-          <polygon class="ah a2h" points="776,190 758,181 758,199"/>
-          <line class="ap a3p" x1="1080" y1="190" x2="1130" y2="190"/>
-          <polygon class="ah a3h" points="1146,190 1128,181 1128,199"/>
-          <g id="mach4"></g><g id="mach3"></g><g id="mach2"></g><g id="mach1"></g>
+          <line class="ap a1p" x1="225" y1="190" x2="265" y2="190"/>
+          <polygon class="ah a1h" points="281,190 263,181 263,199"/>
+          <line class="ap a2p" x1="448" y1="190" x2="488" y2="190"/>
+          <polygon class="ah a2h" points="504,190 486,181 486,199"/>
+          <line class="ap a3p" x1="673" y1="190" x2="713" y2="190"/>
+          <polygon class="ah a3h" points="729,190 711,181 711,199"/>
+          <line class="ap a4p" x1="897" y1="190" x2="937" y2="190"/>
+          <polygon class="ah a4h" points="953,190 935,181 935,199"/>
+          <line class="ap a5p" x1="1134" y1="190" x2="1174" y2="190"/>
+          <polygon class="ah a5h" points="1190,190 1172,181 1172,199"/>
+          <g id="mach4"></g><g id="mach3"></g><g id="mach2"></g><g id="mach5"></g><g id="mach1"></g><g id="mach6"></g>
           <!-- 컨베이어 라인 (머신 작업 높이 y=143) -->
-          <line x1="0" y1="167" x2="1560" y2="167" stroke="#31475F" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.5"/>
+          <line id="flowConveyorLine" x1="0" y1="167" x2="1560" y2="167" stroke="#31475F" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.5"/>
           <g id="ptg">
             <rect x="58" y="143" width="240" height="24" rx="5" fill="#223142"/>
             <rect x="60" y="145" width="236" height="20" rx="4" fill="url(#pipeG)" filter="url(#gPipe)"/>
@@ -1733,7 +1741,16 @@ function doLogin(){
   const err=document.getElementById('loginErr');
   // 로컬 사용자 목록도 포함해서 인증
   const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
-  const found=allUsers.find(u=>u.id===id&&u.pw===pw);
+  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
+  if(!found){
+    // 레거시/초기 계정 fallback
+    const legacy = [
+      {id:'admin', pw:'admin', role:'admin'},
+      {id:'iaan',  pw:'iaan',  role:'admin'},
+      {id:'worker',pw:'worker',role:'worker'}
+    ];
+    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
+  }
   const acc=found?[found.role,{id:found.id,pw:found.pw}]:null;
   if(acc){
     userRole=acc[0];
@@ -2289,12 +2306,13 @@ function moveDashPipeTo(targetX, dur, cb){
 let dashPipeIdx = 0; // 현재 처리 중인 배관 인덱스
 
 // ── 현재 배관 shape로 밴딩 애니메이션 (대시보드/operation 공통) ──
-function playBendAnimShape(svg, animId, shape, runFlag, cb){
+function playBendAnimShape(svg, animId, shape, runFlag, cb, bendId=1){
   const old=document.getElementById(animId); if(old) old.remove();
   const NS='http://www.w3.org/2000/svg';
   const g=document.createElementNS(NS,'g'); g.id=animId;
 
-  const {d, len:pathLen, pw} = buildBendPath(shape);
+  const bendBox = FLOW_LAYOUT_STATE?.boxMap?.[bendId];
+  const {d, len:pathLen, pw} = buildBendPath(shape, { box: bendBox });
 
   function mkP(stroke, sw, dx, dy){
     const p=document.createElementNS(NS,'path');
@@ -2367,15 +2385,24 @@ function playBendAnimShape(svg, animId, shape, runFlag, cb){
 }
 
 // ── 대시보드용 밴딩 (현재 파이프 shape 사용) ──
-function playDashBend(svg, shape, cb){
-  playBendAnimShape(svg,'dashBendAnim', shape, ()=>dashAutoRunning, cb);
+function playDashBend(svg, shape, bendId, cb){
+  playBendAnimShape(svg,'dashBendAnim', shape, ()=>dashAutoRunning, cb, bendId);
 }
 
 // 대시보드 머신 시퀀스 (Full Line 기준, 선택 구성 따름)
+function getDashCycleSteps(machines){
+  const steps=[...machines];
+  if(steps.includes(5) && steps.includes(1) && steps.includes(6)){
+    // Robot 이후 Bending #1/#2를 직렬이 아닌 분기처럼 1대만 선택하여 처리
+    const pickedBend = (dashPipeIdx % 2 === 0) ? 1 : 6;
+    return steps.filter(s=>s!==1 && s!==6).concat(pickedBend);
+  }
+  return steps;
+}
 function dashAutoLoop(){
   if(!dashAutoRunning) return;
   const cfg=getActiveConfig();
-  const steps=[...cfg.machines];
+  const steps=getDashCycleSteps(cfg.machines);
   const stepIdx=dashAutoStep % steps.length;
   const n=steps[stepIdx];
   dashAutoStep++;
@@ -2410,14 +2437,14 @@ function dashAutoLoop(){
   moveDashPipeTo(targetX, travelDur, ()=>{
     if(!dashAutoRunning) return;
 
-    if(n===1){
+    if(n===1 || n===6){
       // 밴딩 머신: 직선 배관 페이드아웃 후 구부러진 배관 그리기
       const dashSvg=document.getElementById('flowSvg');
       if(dashPipeEl){
         dashPipeEl.style.transition = 'opacity 0.4s';
         dashPipeEl.style.opacity = '0';
       }
-      playDashBend(dashSvg, shape, ()=>{
+      playDashBend(dashSvg, shape, n, ()=>{
         if(!dashAutoRunning) return;
         // 사이클 완료 → 생산 카운트 증가
         production+=Math.floor(Math.random()*4)+1;
@@ -2555,16 +2582,151 @@ MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818
 MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
 <rect x="20" y="30" width="320" height="220" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
 <rect x="60" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="105" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2"/>
-<circle cx="255" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2"/>
-<rect x="155" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6"/>
-<line x1="105" y1="163" x2="180" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
-<line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round"/>
-<text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>`;
+<circle cx="105" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 105 163" to="360 105 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<circle cx="255" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 255 163" to="360 255 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<rect x="155" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="155;168;155" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
+<line x1="105" y1="163" x2="180" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="180;193;180" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="205;218;205" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(20,30,320,220,10,'#63AEC9')}${mkScan(21,31,318,218,'#63AEC9')}${mkBadge(26,35,'#1b4660')}`:''}`;
+
+const FLOW_MACHINE_BBOX = {
+  4:{x:10,y:30,w:330,h:280},
+  3:{x:410,y:30,w:300,h:280},
+  2:{x:780,y:30,w:300,h:280},
+  5:{x:20,y:30,w:320,h:220},
+  1:{x:1150,y:30,w:400,h:280},
+  6:{x:1150,y:30,w:400,h:280},
+};
+function flowScaleByCount(n){
+  const raw = 1.05 - (Math.max(1,n)-1)*0.09;
+  return Math.max(0.58, Math.min(1.08, raw));
+}
+function getFlowFrameCenterY(){
+  const svg = document.getElementById('flowSvg');
+  if(!svg) return 190;
+  const vb = (svg.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+  if(vb.length===4 && Number.isFinite(vb[3])) return vb[3]*0.53; // 기존보다 조금 아래 기준
+  return 190;
+}
+let FLOW_LAYOUT_STATE = { centerMap:{}, centerYMap:{}, boxMap:{}, activeIds:[], scale:1 };
+function applyFlowMachineLayout(active){
+  const ids = Array.isArray(active) && active.length ? active : [4,3,2,5,1,6];
+  const hasDualBend = ids.includes(1) && ids.includes(6);
+  const n = ids.length;
+  const left = 145, right = 1415;
+  const slotGap = n>1 ? (right-left)/(n-1) : 0;
+  const centerY = getFlowFrameCenterY();
+  syncFlowConveyorY(centerY);
+  const scale = flowScaleByCount(n);
+  const centerMap = {};
+  const centerYMap = {};
+  const boxMap = {};
+
+  const linearIds = hasDualBend ? ids.filter(id=>id!==6) : ids;
+  const linearN = linearIds.length;
+  const linearGap = linearN>1 ? (right-left)/(linearN-1) : 0;
+
+  linearIds.forEach((id, idx)=>{
+    const b = FLOW_MACHINE_BBOX[id]; if(!b) return;
+    const cx = linearN===1 ? (left+right)/2 : left + linearGap*idx;
+    const localCY = centerY;
+    const tx = cx - scale*(b.x + b.w/2);
+    const ty = localCY - scale*(b.y + b.h/2);
+    centerMap[id]=cx;
+    centerYMap[id]=localCY;
+    const el=document.getElementById('mach'+id);
+    if(el){
+      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
+      el.style.display='';
+    }
+    boxMap[id] = { x: tx + scale*b.x, y: ty + scale*b.y, w: scale*b.w, h: scale*b.h };
+  });
+
+  if(hasDualBend){
+    const b = FLOW_MACHINE_BBOX[6];
+    const bendX = centerMap[1] ?? (linearN===1 ? (left+right)/2 : right);
+    const bendOffset = Math.max(82, (b.h*scale + 24)/2);
+    const bend2Y = centerY + bendOffset;
+    centerYMap[1] = centerY - bendOffset;
+    const b1 = FLOW_MACHINE_BBOX[1];
+    const tx1 = (centerMap[1] ?? bendX) - scale*(b1.x + b1.w/2);
+    const ty1 = centerYMap[1] - scale*(b1.y + b1.h/2);
+    const el1=document.getElementById('mach1');
+    if(el1){
+      el1.setAttribute('transform', `translate(${tx1.toFixed(2)} ${ty1.toFixed(2)}) scale(${scale.toFixed(4)})`);
+    }
+    boxMap[1] = { x: tx1 + scale*b1.x, y: ty1 + scale*b1.y, w: scale*b1.w, h: scale*b1.h };
+    const tx = bendX - scale*(b.x + b.w/2);
+    const ty = bend2Y - scale*(b.y + b.h/2);
+    centerMap[6]=bendX;
+    centerYMap[6]=bend2Y;
+    const el=document.getElementById('mach6');
+    if(el){
+      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
+      el.style.display='';
+    }
+    boxMap[6] = { x: tx + scale*b.x, y: ty + scale*b.y, w: scale*b.w, h: scale*b.h };
+  }
+
+  [1,2,3,4,5,6].forEach(id=>{
+    if(centerMap[id]!==undefined) return;
+    const el=document.getElementById('mach'+id);
+    if(el) el.style.display='none';
+  });
+
+  const layout = { centerMap, centerYMap, boxMap, activeIds: ids, scale, centerY };
+  FLOW_LAYOUT_STATE = layout;
+  return layout;
+}
+function applyFlowArrowLayout(activeIds, centerMap, centerYMap){
+  let pairs = [];
+  const hasDualBend = activeIds.includes(1) && activeIds.includes(6) && activeIds.includes(5);
+  if(hasDualBend){
+    const base = activeIds.filter(id=>id!==6);
+    for(let i=0;i<base.length-1;i++) pairs.push([base[i], base[i+1]]);
+    pairs.push([5,6]);
+  }else{
+    for(let i=0;i<activeIds.length-1;i++) pairs.push([activeIds[i], activeIds[i+1]]);
+  }
+  for(let i=1;i<=5;i++){
+    const lp = document.querySelector('.a'+i+'p');
+    const lh = document.querySelector('.a'+i+'h');
+    const pair = pairs[i-1];
+    if(!lp || !lh || !pair){
+      if(lp) lp.style.visibility='hidden';
+      if(lh) lh.style.visibility='hidden';
+      continue;
+    }
+    const [from,to]=pair;
+    const x1 = (centerMap[from] ?? 0) + 52;
+    const x2 = (centerMap[to] ?? 0) - 52;
+    const fallbackY = FLOW_LAYOUT_STATE?.centerY || 190;
+    const y1 = centerYMap[from] ?? fallbackY;
+    const y2 = centerYMap[to] ?? fallbackY;
+    lp.setAttribute('x1', String(x1));
+    lp.setAttribute('y1', String(y1));
+    lp.setAttribute('x2', String(x2));
+    lp.setAttribute('y2', String(y2));
+    lh.setAttribute('points', `${x2+16},${y2} ${x2-2},${y2-9} ${x2-2},${y2+9}`);
+    lp.style.visibility='visible';
+    lh.style.visibility='visible';
+  }
+}
+function applyDynamicPipeDwell(centerMap){
+  PIPE_DWELL[4] = Math.round((centerMap[4] ?? 175) - PIPE_LEN/2);
+  PIPE_DWELL[3] = Math.round((centerMap[3] ?? 560) - PIPE_LEN/2);
+  PIPE_DWELL[2] = Math.round((centerMap[2] ?? 930) - PIPE_LEN/2);
+  PIPE_DWELL[5] = Math.round((centerMap[5] ?? 180) - PIPE_LEN/2);
+  PIPE_DWELL[1] = Math.round((centerMap[1] ?? 1350) - PIPE_LEN/2);
+  PIPE_DWELL[6] = Math.round((centerMap[6] ?? 1350) - PIPE_LEN/2);
+}
 
 function updateFlow(n){
   const cfg=getActiveConfig();
   const active=cfg.machines;
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
@@ -2584,11 +2746,7 @@ function updateFlow(n){
 
   const svg=document.getElementById('flowSvg');
   if(!svg) return;
-  svg.classList.remove('step1','step2','step3');
-  void svg.offsetWidth;
-  if(n===3)svg.classList.add('step3');
-  else if(n===2)svg.classList.add('step2');
-  else if(n===1)svg.classList.add('step1');
+  svg.classList.remove('step1','step2','step3','step5','step6');
   const C={4:'#69B8D6',3:'#73C59B',2:'#D39D63',5:'#63AEC9',1:'#9285D4',6:'#9285D4'};
   const L={4:'Loader M/C',3:'Cutting M/C',2:'Marking M/C',5:'Moving Robot',1:'Bending M/C',6:'Bending M/C #2'};
   const sd=document.getElementById('stepDot'); if(sd) sd.style.background=n?C[n]:'var(--dim)';
@@ -3096,30 +3254,10 @@ function applyConfigToOperation(){
     });
   }
 
-  // flowSvg: 비활성 머신 dimming + 비활성 화살표 숨김
-  const arrowMap={
-    // arrow[n] = 머신 n에서 다음 머신으로 가는 화살표 (step n이 active일 때 보임)
-    // a1p: Loader(4)→Cutting(3), a2p: Cutting(3)→Laser(2), a3p: Laser(2)→Bending(1)
-  };
-  // flowSvg 머신 visibility
-  [1,2,3,4].forEach(i=>{
-    const el=document.getElementById('mach'+i); if(!el) return;
-    if(active.includes(i)){
-      el.style.opacity='1'; el.style.pointerEvents='auto';
-    } else {
-      el.style.opacity='0.07'; el.style.pointerEvents='none';
-    }
-  });
-  // 화살표 라인 visibility: 두 연속 머신이 모두 active일 때만 표시
-  // a1p: 4→3, a2p: 3→2, a3p: 2→1
-  const arrowPairs=[[4,3,'a1p','a1h'],[3,2,'a2p','a2h'],[2,1,'a3p','a3h']];
-  arrowPairs.forEach(([from,to,ap,ah])=>{
-    const apEl=document.querySelector('.'+ap);
-    const ahEl=document.querySelector('.'+ah);
-    const vis=active.includes(from)&&active.includes(to);
-    if(apEl) apEl.style.visibility=vis?'visible':'hidden';
-    if(ahEl) ahEl.style.visibility=vis?'visible':'hidden';
-  });
+  // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
   // 대시보드 machList도 업데이트
   applyConfigToDashboard();
@@ -3283,8 +3421,10 @@ function setOpLog(msg){const el=document.getElementById('opLog');if(el){el.textC
 // ═══════════════════════════════════════════════════════════════
 
 // 컨베이어 레이어 상수 (flowSvg 기준)
-// viewBox: 0 0 1560 380  / 머신 작업 높이: y≈143~167 (center 155)
-const CONV_Y=143, CONV_H=24;   // 배관 top y, 두께 — 머신 작업 라인과 동일
+// viewBox: 0 0 1560 380
+const CONV_H=24;               // 배관 두께
+let CONV_CENTER_Y=155;         // 배관 중심선 y (동적 보정)
+let CONV_Y=CONV_CENTER_Y-CONV_H/2; // 배관 top y
 const PIPE_LEN=240;            // 배관 길이
 // 각 머신에서 배관 정지 위치 (left-edge x)
 // M4(Loader):x=10-340, M3(Cutting):x=410-710, M2(Laser):x=780-1080, M1(Bending):x=1150-1550
@@ -3293,27 +3433,47 @@ const PIPE_DWELL={start:-270, 4:58, 3:440, 2:808, 5:980, 1:1168, 6:1210};
 let pipeEl=null;
 let pipeCurX=-270;
 
+function syncFlowConveyorY(centerY){
+  CONV_CENTER_Y = centerY;
+  CONV_Y = CONV_CENTER_Y - CONV_H/2;
+
+  const line=document.getElementById('flowConveyorLine');
+  if(line){
+    line.setAttribute('y1', String(CONV_CENTER_Y));
+    line.setAttribute('y2', String(CONV_CENTER_Y));
+  }
+
+  const ptg=document.getElementById('ptg');
+  if(ptg){
+    const delta = CONV_CENTER_Y - 155; // 기존 기본 중심선(155) 기준 이동
+    ptg.setAttribute('transform', `translate(0,${delta.toFixed(2)})`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // buildBendPath — SHAPES 배열의 pts/segs와 정확히 일치하는 경로
 // Bending M/C 영역: x=1150~1550, y=30~310
 // 진입점: ox=1175, oy=CONV_Y+CONV_H/2=155 (파이프 중심선)
 // ─────────────────────────────────────────────────────────────────
-function buildBendPath(shape){
-  const CX = 1230;               // 진입 x (오른쪽으로 여백)
-  const CY = 100;                // 진입 y = 위쪽에서 시작
+function buildBendPath(shape, opts={}){
+  const bendBox = opts.box || { x:1150, y:30, w:400, h:280 };
+  const CX = bendBox.x + Math.max(26, bendBox.w*0.20);  // 밴딩 머신 내부 진입점
+  const CY = bendBox.y + Math.max(20, bendBox.h*0.22);  // 밴딩 머신 내부 상단 여유
   const pw = 20;
   const br = 22;
   const segs = shape.segs || [300];
   const bends = shape.bends || [];
   const pts = shape.pts || [[0,0,0],[3,0,0]];
 
-  // ── 배관이 Bending 뷰박스(x:1150~1550, y:30~280) 안에 들어오도록 scale 계산
+  // ── 배관이 Bending 뷰박스 안에 들어오도록 scale 계산
   const maxSeg = Math.max(...segs);
   const maxX = pts.reduce((m,p)=>Math.max(m,p[0]),0);
   const maxY = pts.reduce((m,p)=>Math.max(m,p[1]+p[2]*0.6),0);
-  // x 여유: 1550-CX=320, y 여유: 280-CY=180
-  const scX = maxX > 0 ? Math.min(300/(maxX*100), 0.55) : 0.55;
-  const scY = maxY > 0 ? Math.min(160/(maxY*100), 0.55) : 0.55;
+  // 박스 여유: 내부 우/하단까지 margin 확보
+  const availW = Math.max(100, bendBox.w*0.72);
+  const availH = Math.max(70,  bendBox.h*0.62);
+  const scX = maxX > 0 ? Math.min(availW/(maxX*100), 0.55) : 0.55;
+  const scY = maxY > 0 ? Math.min(availH/(maxY*100), 0.55) : 0.55;
   const sc  = Math.min(scX, scY, 0.50);
 
   // ── pts의 3D 방향을 2D 투영으로 변환 ──
@@ -5668,8 +5828,11 @@ function selectConfig(id){
 function applyConfigToDashboard(){
   const cfg=getActiveConfig();
   const active=cfg.machines;
+  const flowLayout = applyFlowMachineLayout(active);
+  applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
+  applyDynamicPipeDwell(flowLayout.centerMap);
 
-  [1,2,3,4].forEach(i=>{
+  [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
     if(active.includes(i)){
       // ── 활성 머신: 정상 표시, 애니메이션 있음 ──
@@ -5686,18 +5849,13 @@ function applyConfigToDashboard(){
     }
   });
 
-  // 화살표(머신 간 연결선)도 활성/비활성 반영
-  // a1p: Loader→Cutting(4→3), a2p: Cutting→Laser(3→2), a3p: Laser→Bending(2→1)
-  const arrowActive={
-    a1p: active.includes(4)&&active.includes(3),
-    a2p: active.includes(3)&&active.includes(2),
-    a3p: active.includes(2)&&active.includes(1),
-  };
-  Object.entries(arrowActive).forEach(([cls,on])=>{
-    document.querySelectorAll('.'+cls+', .'+cls.replace('p','h')).forEach(el=>{
-      el.style.opacity=on?'':'0.1';
+  // 화살표(머신 간 연결선): 현재 활성 라인 수에 맞춰 가시화/디밍
+  for(let i=1;i<=5;i++){
+    const on = (i-1) < Math.max(0, active.length-1);
+    document.querySelectorAll('.a'+i+'p, .a'+i+'h').forEach(el=>{
+      el.style.opacity = on ? '1' : '0.1';
     });
-  });
+  }
 
   // Machines 패널 업데이트
   initMachList(null);
@@ -5800,6 +5958,7 @@ function initSettingsPage(){
 // 기본 계정 (변경 불가)
 const DEFAULT_ACCOUNTS=[
   {id:'admin', name:'관리자',  pw:'admin',  role:'admin',  fixed:true},
+  {id:'iaan',  name:'관리자(legacy)',  pw:'iaan',  role:'admin',  fixed:true},
   {id:'worker',name:'작업자',  pw:'worker', role:'worker', fixed:true},
 ];
 let userEditIdx = null; // null=신규, number=수정 인덱스
@@ -5817,7 +5976,8 @@ function saveUsers(users){
   // ACCOUNTS 동기화
   users.forEach(u=>{ ACCOUNTS[u.role+'_'+u.id]={id:u.id,pw:u.pw}; });
   // 기본 계정은 항상 유지
-  ACCOUNTS.admin={id:'iaan',pw:'iaan'};
+  ACCOUNTS.admin={id:'admin',pw:'admin'};
+  ACCOUNTS.admin_iaan={id:'iaan',pw:'iaan'};
   ACCOUNTS.worker={id:'worker',pw:'worker'};
 }
 

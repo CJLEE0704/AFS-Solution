@@ -1741,7 +1741,16 @@ function doLogin(){
   const err=document.getElementById('loginErr');
   // 로컬 사용자 목록도 포함해서 인증
   const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
-  const found=allUsers.find(u=>u.id===id&&u.pw===pw);
+  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
+  if(!found){
+    // 레거시/초기 계정 fallback
+    const legacy = [
+      {id:'admin', pw:'admin', role:'admin'},
+      {id:'iaan',  pw:'iaan',  role:'admin'},
+      {id:'worker',pw:'worker',role:'worker'}
+    ];
+    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
+  }
   const acc=found?[found.role,{id:found.id,pw:found.pw}]:null;
   if(acc){
     userRole=acc[0];
@@ -2660,113 +2669,6 @@ function applyFlowMachineLayout(active){
   const layout = { centerMap, centerYMap, boxMap, activeIds: ids, scale };
   FLOW_LAYOUT_STATE = layout;
   return layout;
-}
-function applyFlowArrowLayout(activeIds, centerMap, centerYMap){
-  let pairs = [];
-  const hasDualBend = activeIds.includes(1) && activeIds.includes(6) && activeIds.includes(5);
-  if(hasDualBend){
-    const base = activeIds.filter(id=>id!==6);
-    for(let i=0;i<base.length-1;i++) pairs.push([base[i], base[i+1]]);
-    pairs.push([5,6]);
-  }else{
-    for(let i=0;i<activeIds.length-1;i++) pairs.push([activeIds[i], activeIds[i+1]]);
-  }
-  for(let i=1;i<=5;i++){
-    const lp = document.querySelector('.a'+i+'p');
-    const lh = document.querySelector('.a'+i+'h');
-    const pair = pairs[i-1];
-    if(!lp || !lh || !pair){
-      if(lp) lp.style.visibility='hidden';
-      if(lh) lh.style.visibility='hidden';
-      continue;
-    }
-    const [from,to]=pair;
-    const x1 = (centerMap[from] ?? 0) + 52;
-    const x2 = (centerMap[to] ?? 0) - 52;
-    const y1 = centerYMap[from] ?? 190;
-    const y2 = centerYMap[to] ?? 190;
-    lp.setAttribute('x1', String(x1));
-    lp.setAttribute('y1', String(y1));
-    lp.setAttribute('x2', String(x2));
-    lp.setAttribute('y2', String(y2));
-    lh.setAttribute('points', `${x2+16},${y2} ${x2-2},${y2-9} ${x2-2},${y2+9}`);
-    lp.style.visibility='visible';
-    lh.style.visibility='visible';
-  }
-}
-function applyDynamicPipeDwell(centerMap){
-  PIPE_DWELL[4] = Math.round((centerMap[4] ?? 175) - PIPE_LEN/2);
-  PIPE_DWELL[3] = Math.round((centerMap[3] ?? 560) - PIPE_LEN/2);
-  PIPE_DWELL[2] = Math.round((centerMap[2] ?? 930) - PIPE_LEN/2);
-  PIPE_DWELL[5] = Math.round((centerMap[5] ?? 180) - PIPE_LEN/2);
-  PIPE_DWELL[1] = Math.round((centerMap[1] ?? 1350) - PIPE_LEN/2);
-  PIPE_DWELL[6] = Math.round((centerMap[6] ?? 1350) - PIPE_LEN/2);
-}
-
-const FLOW_MACHINE_BBOX = {
-  4:{x:10,y:30,w:330,h:280},
-  3:{x:410,y:30,w:300,h:280},
-  2:{x:780,y:30,w:300,h:280},
-  5:{x:20,y:30,w:320,h:220},
-  1:{x:1150,y:30,w:400,h:280},
-  6:{x:1150,y:30,w:400,h:280},
-};
-function flowScaleByCount(n){
-  const raw = 1.05 - (Math.max(1,n)-1)*0.09;
-  return Math.max(0.58, Math.min(1.08, raw));
-}
-function applyFlowMachineLayout(active){
-  const ids = Array.isArray(active) && active.length ? active : [4,3,2,5,1,6];
-  const hasDualBend = ids.includes(1) && ids.includes(6);
-  const n = ids.length;
-  const left = 145, right = 1415;
-  const slotGap = n>1 ? (right-left)/(n-1) : 0;
-  const centerY = 170;
-  const scale = flowScaleByCount(n);
-  const centerMap = {};
-  const centerYMap = {};
-
-  const linearIds = hasDualBend ? ids.filter(id=>id!==6) : ids;
-  const linearN = linearIds.length;
-  const linearGap = linearN>1 ? (right-left)/(linearN-1) : 0;
-
-  linearIds.forEach((id, idx)=>{
-    const b = FLOW_MACHINE_BBOX[id]; if(!b) return;
-    const cx = linearN===1 ? (left+right)/2 : left + linearGap*idx;
-    const localCY = hasDualBend && id===1 ? (centerY - 70) : centerY;
-    const tx = cx - scale*(b.x + b.w/2);
-    const ty = localCY - scale*(b.y + b.h/2);
-    centerMap[id]=cx;
-    centerYMap[id]=localCY;
-    const el=document.getElementById('mach'+id);
-    if(el){
-      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
-      el.style.display='';
-    }
-  });
-
-  if(hasDualBend){
-    const b = FLOW_MACHINE_BBOX[6];
-    const bendX = centerMap[1] ?? (linearN===1 ? (left+right)/2 : right);
-    const bend2Y = centerY + 70;
-    const tx = bendX - scale*(b.x + b.w/2);
-    const ty = bend2Y - scale*(b.y + b.h/2);
-    centerMap[6]=bendX;
-    centerYMap[6]=bend2Y;
-    const el=document.getElementById('mach6');
-    if(el){
-      el.setAttribute('transform', `translate(${tx.toFixed(2)} ${ty.toFixed(2)}) scale(${scale.toFixed(4)})`);
-      el.style.display='';
-    }
-  }
-
-  [1,2,3,4,5,6].forEach(id=>{
-    if(centerMap[id]!==undefined) return;
-    const el=document.getElementById('mach'+id);
-    if(el) el.style.display='none';
-  });
-
-  return { centerMap, centerYMap, activeIds: ids };
 }
 function applyFlowArrowLayout(activeIds, centerMap, centerYMap){
   let pairs = [];
@@ -6028,6 +5930,7 @@ function initSettingsPage(){
 // 기본 계정 (변경 불가)
 const DEFAULT_ACCOUNTS=[
   {id:'admin', name:'관리자',  pw:'admin',  role:'admin',  fixed:true},
+  {id:'iaan',  name:'관리자(legacy)',  pw:'iaan',  role:'admin',  fixed:true},
   {id:'worker',name:'작업자',  pw:'worker', role:'worker', fixed:true},
 ];
 let userEditIdx = null; // null=신규, number=수정 인덱스
@@ -6045,7 +5948,8 @@ function saveUsers(users){
   // ACCOUNTS 동기화
   users.forEach(u=>{ ACCOUNTS[u.role+'_'+u.id]={id:u.id,pw:u.pw}; });
   // 기본 계정은 항상 유지
-  ACCOUNTS.admin={id:'iaan',pw:'iaan'};
+  ACCOUNTS.admin={id:'admin',pw:'admin'};
+  ACCOUNTS.admin_iaan={id:'iaan',pw:'iaan'};
   ACCOUNTS.worker={id:'worker',pw:'worker'};
 }
 

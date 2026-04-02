@@ -3432,6 +3432,7 @@ const STEP_DUR_RANGE={
 const STEP_COL={4:'#6FB6C9',3:'#6FB58A',2:'#C89263',5:'#63AEC9',1:'#877BC6',6:'#877BC6'};
 
 function pickStepDuration(step){
+  if(simModeOn) return STEP_DUR[step] || 2200; // 데모 모드: 랜덤 편차 제거(시퀀스 가독성)
   const range = STEP_DUR_RANGE[step];
   if(!range) return STEP_DUR[step] || 2200;
   const [min,max] = range;
@@ -3812,6 +3813,13 @@ function canReceivePipe(stepId){
   return !!stepId && !stageSlots[stepId] && isStepReady(stepId);
 }
 
+function getReceiveBlockReason(stepId){
+  if(!stepId) return '다음 공정 없음';
+  if(stageSlots[stepId]) return `${stageName(stepId)} 점유 중`;
+  if(!isStepReady(stepId)) return `${stageName(stepId)} Ready 대기`;
+  return '';
+}
+
 function chooseReadyBending(active){
   const cands = active.filter(s=>s===1 || s===6);
   if(cands.length===0) return null;
@@ -3887,8 +3895,26 @@ function runPipelineTick(){
       if(target){
         stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
+        slot.holdReason = '';
         appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
         setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}${formatPipeTrace(slot.pipeIdx)}`);
+      }else{
+        const b1Active = active.includes(1);
+        const b2Active = active.includes(6);
+        let reason = 'Bending 대기';
+        if(b1Active || b2Active){
+          const b1Busy = b1Active && !!stageSlots[1];
+          const b2Busy = b2Active && !!stageSlots[6];
+          const b1Ready = !b1Active || isStepReady(1);
+          const b2Ready = !b2Active || isStepReady(6);
+          if((b1Busy||!b1Active) && (b2Busy||!b2Active)) reason='Bending 점유 중';
+          else if(!b1Ready && !b2Ready) reason='Bending Ready 대기';
+          else if((b1Busy && !b2Ready) || (b2Busy && !b1Ready)) reason='Bending 점유/Ready 대기';
+        }
+        if(slot.holdReason !== reason){
+          slot.holdReason = reason;
+          setOpLog(`⏸ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot HOLD (${reason})`);
+        }
       }
       continue;
     }
@@ -3898,7 +3924,14 @@ function runPipelineTick(){
     if(canReceivePipe(next)){
       stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
       appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
+      slot.holdReason = '';
       stageSlots[s] = null;
+    }else{
+      const reason = getReceiveBlockReason(next);
+      if(slot.holdReason !== reason){
+        slot.holdReason = reason;
+        setOpLog(`⏸ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: ${stageName(s)} HOLD (${reason})`);
+      }
     }
   }
 
@@ -6425,10 +6458,11 @@ function updateWorkerMachines(step, slots=null){
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById(wMap[i]); if(!el) return;
-    el.innerHTML=MSVG[i](step===i);
+    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
+    const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
+    el.innerHTML=MSVG[i](machineActive);
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
-    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
     _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,activeStageStep,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
   });
@@ -6436,13 +6470,14 @@ function updateWorkerMachines(step, slots=null){
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const svg=document.getElementById('opMach'+i); if(!svg) return;
-    const activeFlag = step===i ? '1' : '0';
+    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
+    const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
+    const activeFlag = machineActive ? '1' : '0';
     if(svg.dataset.machineActive !== activeFlag){
-      svg.innerHTML=MSVG[i](step===i);   // 상태 변화 시에만 재렌더
+      svg.innerHTML=MSVG[i](machineActive);   // 상태 변화 시에만 재렌더
       svg.dataset.machineActive = activeFlag;
     }
     svg.setAttribute('viewBox',W_VBMAP[i]);
-    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
     _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
   });

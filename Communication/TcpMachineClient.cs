@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PipeBendingDashboard.Communication
@@ -17,6 +19,9 @@ namespace PipeBendingDashboard.Communication
         private readonly string _machineName;
         private readonly string _ip;
         private readonly int    _port;
+        private readonly SemaphoreSlim _ioLock = new(1, 1);
+        private readonly List<byte> _recvBuffer = new();
+        private const int MaxLineBytes = 4096;
 
         public bool   IsConnected  => _client?.Connected ?? false;
         public string MachineName  => _machineName;
@@ -106,6 +111,41 @@ namespace PipeBendingDashboard.Communication
             return data == null ? null : (encoding ?? Encoding.ASCII).GetString(data);
         }
 
+        /// <summary>
+        /// CRLF/LF 라인 단위 수신 (TCP 패킷 분할/합침 대응)
+        /// </summary>
+        public async Task<string?> ReceiveLineAsync(Encoding? encoding = null)
+        {
+            try
+            {
+                if (_stream == null || !IsConnected) return null;
+                encoding ??= Encoding.ASCII;
+
+                while (true)
+                {
+                    var line = TryExtractLine(encoding);
+                    if (line != null) return line;
+
+                    var chunk = new byte[1024];
+                    int bytesRead = await _stream.ReadAsync(chunk.AsMemory(0, chunk.Length));
+                    if (bytesRead == 0) return null;
+
+                    for (int i = 0; i < bytesRead; i++) _recvBuffer.Add(chunk[i]);
+                    if (_recvBuffer.Count > MaxLineBytes)
+                    {
+                        Log($"수신 프레임 초과 ({_recvBuffer.Count} bytes)");
+                        _recvBuffer.Clear();
+                        return null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"라인 수신 실패 — {ex.Message}");
+                return null;
+            }
+        }
+
         // ── 송신 후 수신 (Request / Response) ────────────────────
         public async Task<byte[]?> SendReceiveAsync(byte[] command, int bufferSize = 1024)
         {
@@ -115,8 +155,23 @@ namespace PipeBendingDashboard.Communication
 
         public async Task<string?> SendReceiveStringAsync(string command, Encoding? encoding = null)
         {
-            if (!await SendStringAsync(command, encoding)) return null;
-            return await ReceiveStringAsync(encoding);
+            await _ioLock.WaitAsync();
+            try
+            {
+                if (!await SendStringAsync(command, encoding)) return null;
+                var line = await ReceiveLineAsync(encoding);
+                if (line == null) return null;
+                if (!IsValidResponse(line))
+                {
+                    Log($"응답 형식 오류 — '{line}'");
+                    return null;
+                }
+                return line;
+            }
+            finally
+            {
+                _ioLock.Release();
+            }
         }
 
         // ── 자동 재연결 ───────────────────────────────────────────
@@ -145,13 +200,47 @@ namespace PipeBendingDashboard.Communication
             catch { }
         }
 
-        public void Dispose() => Disconnect();
+        public void Dispose()
+        {
+            _ioLock.Dispose();
+            Disconnect();
+        }
 
         private void Log(string message)
         {
             var msg = $"[{_machineName}] {message}";
             System.Diagnostics.Debug.WriteLine(msg);
             LogReceived?.Invoke(_machineName, msg);
+        }
+
+        private string? TryExtractLine(Encoding encoding)
+        {
+            for (int i = 0; i < _recvBuffer.Count; i++)
+            {
+                if (_recvBuffer[i] == (byte)'\n')
+                {
+                    int len = i;
+                    if (len > 0 && _recvBuffer[len - 1] == (byte)'\r') len--;
+
+                    var lineBytes = _recvBuffer.GetRange(0, len).ToArray();
+                    _recvBuffer.RemoveRange(0, i + 1);
+                    return encoding.GetString(lineBytes).Trim();
+                }
+            }
+            return null;
+        }
+
+        private static bool IsValidResponse(string response)
+        {
+            if (string.IsNullOrWhiteSpace(response)) return false;
+            var upper = response.Trim().ToUpperInvariant();
+            return upper.StartsWith("OK")
+                || upper.StartsWith("ERROR")
+                || upper.StartsWith("NOT_READY")
+                || upper.Contains("STATUS")
+                || upper.Contains("RUNNING")
+                || upper.Contains("IDLE")
+                || upper.Contains("ALARM");
         }
     }
 }

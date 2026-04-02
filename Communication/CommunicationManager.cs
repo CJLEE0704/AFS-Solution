@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,12 +33,14 @@ namespace PipeBendingDashboard.Communication
         private readonly AllMachineStatus _status = new();
 
         // ── 폴링 타이머 ──────────────────────────────────────────
-        private Timer?       _pollTimer;
+        private CancellationTokenSource? _pollCts;
+        private Task? _pollTask;
         private bool         _isPolling = false;
         private readonly int _pollIntervalMs;
 
         // ── 명령 ACK 직렬화 잠금 (동시 명령 방지) ───────────────
         private readonly SemaphoreSlim _cmdLock = new(1, 1);
+        private readonly TimeSpan _readyRefreshInterval = TimeSpan.FromSeconds(1);
 
         // ── 이벤트 ───────────────────────────────────────────────
         public event Action<string>?                     StatusUpdated;  // JSON
@@ -274,6 +277,7 @@ namespace PipeBendingDashboard.Communication
 
                 bool isReady = resp.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
                 status.IsReady     = isReady;
+                status.LastReadyCheckedAtUtc = DateTime.UtcNow;
                 status.LastMessage = isReady ? "Ready — 명령 대기 중" : $"Not Ready: {resp}";
 
                 System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 응답: {resp} → {(isReady ? "OK" : "NG")}");
@@ -284,6 +288,7 @@ namespace PipeBendingDashboard.Communication
             catch (Exception ex)
             {
                 status.IsReady     = false;
+                status.LastReadyCheckedAtUtc = DateTime.UtcNow;
                 status.LastMessage = $"Ready 확인 실패: {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 실패: {ex.Message}");
                 ReadyChecked?.Invoke(status.MachineId, false, ex.Message);
@@ -309,32 +314,51 @@ namespace PipeBendingDashboard.Communication
         {
             if (_isPolling) return;
             _isPolling = true;
-            _pollTimer = new Timer(async _ => await PollAllAsync(), null, 0, _pollIntervalMs);
+            _pollCts = new CancellationTokenSource();
+            _pollTask = Task.Run(() => PollLoopAsync(_pollCts.Token));
         }
 
         public void StopPolling()
         {
             _isPolling = false;
-            _pollTimer?.Dispose();
-            _pollTimer = null;
+            _pollCts?.Cancel();
+            try { _pollTask?.Wait(1000); } catch { }
+            _pollTask = null;
+            _pollCts?.Dispose();
+            _pollCts = null;
+        }
+
+        private async Task PollLoopAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try { await PollAllAsync(); } catch { }
+                try { await Task.Delay(_pollIntervalMs, ct); }
+                catch (TaskCanceledException) { break; }
+            }
         }
 
         private async Task PollAllAsync()
         {
-            // 명령 처리 중이면 폴링 스킵 (간섭 방지)
-            if (_cmdLock.CurrentCount == 0) return;
+            if (!await _cmdLock.WaitAsync(0)) return;
+            try
+            {
+                // 활성 머신만 폴링
+                var tasks = new List<Task>();
+                if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  MachineProtocol.Loader.Status));
+                if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, MachineProtocol.Cutting.Status));
+                if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   MachineProtocol.Laser.Status));
+                if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(PollOneAsync(_robotClient,   _status.Robot,   MachineProtocol.Robot.Status));
+                if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, MachineProtocol.Bending.Status));
+                if (_activeMachineIds.Contains("BENDING2")) tasks.Add(PollOneAsync(_bending2Client, _status.Bending2, MachineProtocol.Bending2.Status));
 
-            // 활성 머신만 폴링
-            var tasks = new List<Task>();
-            if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  MachineProtocol.Loader.Status));
-            if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, MachineProtocol.Cutting.Status));
-            if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   MachineProtocol.Laser.Status));
-            if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(PollOneAsync(_robotClient,   _status.Robot,   MachineProtocol.Robot.Status));
-            if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, MachineProtocol.Bending.Status));
-            if (_activeMachineIds.Contains("BENDING2")) tasks.Add(PollOneAsync(_bending2Client, _status.Bending2, MachineProtocol.Bending2.Status));
-
-            if (tasks.Count > 0) await Task.WhenAll(tasks);
-            NotifyStatusUpdate();
+                if (tasks.Count > 0) await Task.WhenAll(tasks);
+                NotifyStatusUpdate();
+            }
+            finally
+            {
+                _cmdLock.Release();
+            }
         }
 
         private async Task PollOneAsync(TcpMachineClient client, MachineStatus status, string command)
@@ -357,6 +381,7 @@ namespace PipeBendingDashboard.Communication
                 status.HasAlarm     = response.Contains("ALARM:1");
                 if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
                 if (TryParseValue(response, "OEE:",   out double oee)) status.Oee   = oee;
+                await RefreshReadyStateAsync(client, status, response);
             }
             catch (Exception ex)
             {
@@ -402,6 +427,12 @@ namespace PipeBendingDashboard.Communication
         // ══════════════════════════════════════════════════════════
         public async Task HandleWebCommandAsync(WebCommand cmd)
         {
+            if (cmd.Target.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleAllTargetAsync(cmd);
+                return;
+            }
+
             var protocol = (cmd.Type.ToUpper(), cmd.Target.ToUpper()) switch
             {
                 ("START",  "LOADER")  => MachineProtocol.Loader.Start,
@@ -444,11 +475,42 @@ namespace PipeBendingDashboard.Communication
 
             try
             {
+                var targetId = cmd.Target.ToUpperInvariant();
+                var cmdType  = cmd.Type.ToUpperInvariant();
+                if (!_activeMachineIds.Contains(targetId))
+                {
+                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 비활성 머신");
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:INACTIVE_MACHINE");
+                    return;
+                }
+
                 var client = GetClient(cmd.Target);
                 if (client == null || !client.IsConnected)
                 {
                     LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 연결되지 않음");
                     CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NOT_CONNECTED");
+                    return;
+                }
+
+                var status = GetStatus(cmd.Target);
+                if (status == null)
+                {
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:UNKNOWN_MACHINE");
+                    return;
+                }
+
+                if ((cmdType == "START" || cmdType == "RESET") && !status.IsReady)
+                {
+                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ READY 인터락 미충족");
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NOT_READY");
+                    return;
+                }
+
+                var lineInterlockError = ValidateLineInterlock(targetId, cmdType);
+                if (lineInterlockError != null)
+                {
+                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 라인 인터락 거부: {lineInterlockError}");
+                    CommandAck?.Invoke(cmd.Target, cmd.Type, lineInterlockError);
                     return;
                 }
 
@@ -468,16 +530,12 @@ namespace PipeBendingDashboard.Communication
                 LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ← ACK: {ack}");
 
                 // ── 상태 즉시 갱신 ───────────────────────────────────
-                var status = GetStatus(cmd.Target);
-                if (status != null)
-                {
-                    status.LastMessage = ack;
-                    bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                    if      (cmd.Type.ToUpper() == "START" && isOk)  status.Status = "RUN";
-                    else if (cmd.Type.ToUpper() == "STOP"  && isOk)  status.Status = "IDLE";
-                    else if (cmd.Type.ToUpper() == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
-                    if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
-                }
+                status.LastMessage = ack;
+                bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
+                if      (cmdType == "START" && isOk)  status.Status = "RUN";
+                else if (cmdType == "STOP"  && isOk)  status.Status = "IDLE";
+                else if (cmdType == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
+                if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
 
                 // ── HTML에 ACK 결과 전달 → 다음 명령 허용 ──────────
                 CommandAck?.Invoke(cmd.Target, cmd.Type, ack);
@@ -543,6 +601,88 @@ namespace PipeBendingDashboard.Communication
             var end  = rest.IndexOfAny(new[] { ',', '\r', '\n', ' ' });
             var num  = end < 0 ? rest : rest[..end];
             return double.TryParse(num, out value);
+        }
+
+        private async Task HandleAllTargetAsync(WebCommand cmd)
+        {
+            var type = cmd.Type.ToUpperInvariant();
+            // 정책: ALL 대상은 STOP/STATUS만 허용 (START/RESET 금지)
+            if (type != "STOP" && type != "STATUS")
+            {
+                CommandAck?.Invoke("ALL", cmd.Type, "ERROR:ALL_NOT_ALLOWED");
+                return;
+            }
+
+            var targets = _activeMachineIds.ToArray();
+            var results = new List<string>(targets.Length);
+            foreach (var target in targets)
+            {
+                var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+                void AckHandler(string machineId, string cmdType, string response)
+                {
+                    if (machineId.Equals(target, StringComparison.OrdinalIgnoreCase)
+                        && cmdType.Equals(cmd.Type, StringComparison.OrdinalIgnoreCase))
+                    {
+                        completion.TrySetResult(response);
+                    }
+                }
+
+                CommandAck += AckHandler;
+                try
+                {
+                    await HandleWebCommandAsync(new WebCommand { Type = cmd.Type, Target = target, Data = cmd.Data });
+                    var response = await completion.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                    results.Add($"{target}:{response}");
+                }
+                catch
+                {
+                    results.Add($"{target}:ERROR:TIMEOUT");
+                }
+                finally
+                {
+                    CommandAck -= AckHandler;
+                }
+            }
+
+            CommandAck?.Invoke("ALL", cmd.Type, string.Join(",", results));
+        }
+
+        private async Task RefreshReadyStateAsync(TcpMachineClient client, MachineStatus status, string statusResponse)
+        {
+            var upper = statusResponse.ToUpperInvariant();
+            if (upper.Contains("READY:1") || upper.Contains("READY=1") || upper.Contains("READY:TRUE"))
+            {
+                status.IsReady = true;
+                status.LastReadyCheckedAtUtc = DateTime.UtcNow;
+                return;
+            }
+
+            if (upper.Contains("NOT_READY") || upper.Contains("READY:0") || upper.Contains("READY=0"))
+            {
+                status.IsReady = false;
+                status.LastReadyCheckedAtUtc = DateTime.UtcNow;
+                return;
+            }
+
+            if (DateTime.UtcNow - status.LastReadyCheckedAtUtc < _readyRefreshInterval) return;
+            await CheckReadyAsync(client, status);
+        }
+
+        private string? ValidateLineInterlock(string targetId, string cmdType)
+        {
+            if (cmdType != "START") return null;
+
+            bool Ready(string id) => GetStatus(id)?.IsReady == true && _activeMachineIds.Contains(id);
+            return targetId switch
+            {
+                "CUTTING" when !Ready("LOADER") => "ERROR:UPSTREAM_NOT_READY",
+                "LASER" when !Ready("CUTTING") => "ERROR:UPSTREAM_NOT_READY",
+                "ROBOT" when !Ready("LASER") => "ERROR:UPSTREAM_NOT_READY",
+                "ROBOT" when !(Ready("BENDING") || Ready("BENDING2")) => "ERROR:NO_READY_DOWNSTREAM",
+                "BENDING" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
+                "BENDING2" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
+                _ => null
+            };
         }
 
         public void Dispose()

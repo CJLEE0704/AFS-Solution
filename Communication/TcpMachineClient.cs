@@ -239,7 +239,11 @@ namespace PipeBendingDashboard.Communication
                 || upper.StartsWith("NOT_READY")
                 || upper.Contains("STATUS")
                 || upper.Contains("RUNNING")
+                || upper.Contains("WORKING")
                 || upper.Contains("IDLE")
+                || upper.Contains("READY")
+                || upper.Contains("FINISH")
+                || upper.Contains("UNLOAD_COMPLETE")
                 || upper.Contains("ALARM");
         }
     }

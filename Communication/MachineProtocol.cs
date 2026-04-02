@@ -1,5 +1,13 @@
 namespace PipeBendingDashboard.Communication
 {
+    public sealed class ParsedMachineStatus
+    {
+        public string Status { get; set; } = "READY";
+        public bool IsUnloadComplete { get; set; } = false;
+        public bool? IsReady { get; set; } = null;
+        public string ErrorCode { get; set; } = "";
+    }
+
     /// <summary>
     /// 장비별 TCP 명령어 정의
     /// ※ 실제 장비 매뉴얼 확인 후 명령어 수정 필요
@@ -88,5 +96,53 @@ namespace PipeBendingDashboard.Communication
                 "BENDING2"=> Bending2.Ready,
                 _ => null
             };
+
+        public static ParsedMachineStatus ParseStatusResponse(string response)
+        {
+            var parsed = new ParsedMachineStatus();
+            if (string.IsNullOrWhiteSpace(response)) return parsed;
+
+            var upper = response.Trim().ToUpperInvariant();
+            if (upper.Contains("UNLOAD_COMPLETE"))
+            {
+                parsed.IsUnloadComplete = true;
+                parsed.Status = "FINISH";
+            }
+            else if (upper.Contains("ALARM") || upper.Contains("ERROR"))
+            {
+                parsed.Status = "ALARM";
+            }
+            else if (upper.Contains("WORKING") || upper.Contains("RUNNING"))
+            {
+                parsed.Status = "WORKING";
+            }
+            else if (upper.Contains("FINISH"))
+            {
+                parsed.Status = "FINISH";
+            }
+            else if (upper.Contains("READY") || upper.Contains("IDLE"))
+            {
+                parsed.Status = "READY";
+            }
+
+            if (upper.Contains("READY:1") || upper.Contains("READY=1") || upper.Contains("READY:TRUE")) parsed.IsReady = true;
+            if (upper.Contains("READY:0") || upper.Contains("READY=0") || upper.Contains("READY:FALSE") || upper.Contains("NOT_READY")) parsed.IsReady = false;
+
+            var errorIdx = upper.IndexOf("ERROR_CODE", System.StringComparison.Ordinal);
+            if (errorIdx < 0) errorIdx = upper.IndexOf("ERR", System.StringComparison.Ordinal);
+            if (errorIdx >= 0)
+            {
+                var slice = response[errorIdx..];
+                var sep = slice.IndexOfAny(new[] { ':', '=' });
+                if (sep >= 0)
+                {
+                    var value = slice[(sep + 1)..].Trim();
+                    var end = value.IndexOfAny(new[] { ',', ' ', '\r', '\n', ';' });
+                    parsed.ErrorCode = (end >= 0 ? value[..end] : value).Trim();
+                }
+            }
+
+            return parsed;
+        }
     }
 }

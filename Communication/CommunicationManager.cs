@@ -218,7 +218,7 @@ namespace PipeBendingDashboard.Communication
                     {
                         status.IsConnected = false;
                         status.IsReady     = false;
-                        status.Status      = "IDLE";
+                        status.Status      = "READY";
                         status.LastMessage = "비활성 머신 (구성에서 제외됨)";
                     }
                 }
@@ -246,16 +246,18 @@ namespace PipeBendingDashboard.Communication
             status.IsConnected = await client.ConnectAsync();
             if (status.IsConnected)
             {
-                status.Status      = "IDLE";
+                status.Status      = "READY";
                 status.LastMessage = "연결 성공 — Ready 확인 중...";
                 // 연결 성공 시 Ready 명령 전송
                 await CheckReadyAsync(client, status);
             }
             else
             {
-                status.Status      = "DOWN";
+                status.Status      = "ALARM";
                 status.LastMessage = "연결 실패";
                 status.IsReady     = false;
+                status.HasAlarm    = true;
+                status.ErrorCode   = "NET_CONNECT_FAIL";
             }
         }
 
@@ -278,6 +280,7 @@ namespace PipeBendingDashboard.Communication
                 bool isReady = resp.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
                 status.IsReady     = isReady;
                 status.LastReadyCheckedAtUtc = DateTime.UtcNow;
+                if (!status.IsConnected) status.IsReady = false;
                 status.LastMessage = isReady ? "Ready — 명령 대기 중" : $"Not Ready: {resp}";
 
                 System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 응답: {resp} → {(isReady ? "OK" : "NG")}");
@@ -363,29 +366,44 @@ namespace PipeBendingDashboard.Communication
 
         private async Task PollOneAsync(TcpMachineClient client, MachineStatus status, string command)
         {
-            if (!client.IsConnected) { status.IsConnected = false; status.Status = "DOWN"; return; }
+            if (!client.IsConnected)
+            {
+                status.IsConnected = false;
+                status.IsReady = false;
+                status.Status = "ALARM";
+                status.HasAlarm = true;
+                status.ErrorCode = "NET_DISCONNECTED";
+                status.LastMessage = "연결 끊김";
+                return;
+            }
             try
             {
                 var response = await client.SendReceiveStringAsync(command);
                 if (response == null)
                 {
-                    status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = "응답 없음";
+                    status.IsConnected = false;
+                    status.IsReady = false;
+                    status.Status = "ALARM";
+                    status.HasAlarm = true;
+                    status.ErrorCode = "NET_NO_RESPONSE";
+                    status.LastMessage = "응답 없음";
                     return;
                 }
                 status.IsConnected  = true;
                 status.LastMessage  = response.Trim();
-                status.Status       = response.Contains("RUNNING") ? "RUN"
-                                    : response.Contains("ALARM")   ? "ALARM"
-                                    : response.Contains("ERROR")   ? "DOWN"
-                                    : "IDLE";
-                status.HasAlarm     = response.Contains("ALARM:1");
+                ApplyParsedStatus(status, MachineProtocol.ParseStatusResponse(response));
                 if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
                 if (TryParseValue(response, "OEE:",   out double oee)) status.Oee   = oee;
                 await RefreshReadyStateAsync(client, status, response);
             }
             catch (Exception ex)
             {
-                status.IsConnected = false; status.Status = "DOWN"; status.LastMessage = ex.Message;
+                status.IsConnected = false;
+                status.IsReady = false;
+                status.Status = "ALARM";
+                status.HasAlarm = true;
+                status.ErrorCode = "NET_EXCEPTION";
+                status.LastMessage = ex.Message;
             }
         }
 
@@ -532,10 +550,14 @@ namespace PipeBendingDashboard.Communication
                 // ── 상태 즉시 갱신 ───────────────────────────────────
                 status.LastMessage = ack;
                 bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                if      (cmdType == "START" && isOk)  status.Status = "RUN";
-                else if (cmdType == "STOP"  && isOk)  status.Status = "IDLE";
-                else if (cmdType == "RESET" && isOk) { status.Status = "IDLE"; status.HasAlarm = false; }
-                if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) status.HasAlarm = true;
+                if      (cmdType == "START" && isOk)  status.Status = "WORKING";
+                else if (cmdType == "STOP"  && isOk)  status.Status = "READY";
+                else if (cmdType == "RESET" && isOk) { status.Status = "READY"; status.HasAlarm = false; status.ErrorCode = ""; }
+                if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+                {
+                    status.HasAlarm = true;
+                    status.Status = "ALARM";
+                }
 
                 // ── HTML에 ACK 결과 전달 → 다음 명령 허용 ──────────
                 CommandAck?.Invoke(cmd.Target, cmd.Type, ack);
@@ -553,7 +575,13 @@ namespace PipeBendingDashboard.Communication
             var status = GetStatus(machineId);
             if (status == null) return;
             status.IsConnected = isConnected;
-            status.Status      = isConnected ? "IDLE" : "DOWN";
+            status.Status      = isConnected ? "READY" : "ALARM";
+            if (!isConnected)
+            {
+                status.IsReady = false;
+                status.HasAlarm = true;
+                status.ErrorCode = "NET_DISCONNECTED";
+            }
             NotifyStatusUpdate();
         }
 
@@ -649,15 +677,15 @@ namespace PipeBendingDashboard.Communication
 
         private async Task RefreshReadyStateAsync(TcpMachineClient client, MachineStatus status, string statusResponse)
         {
-            var upper = statusResponse.ToUpperInvariant();
-            if (upper.Contains("READY:1") || upper.Contains("READY=1") || upper.Contains("READY:TRUE"))
+            var parsed = MachineProtocol.ParseStatusResponse(statusResponse);
+            if (parsed.IsReady == true)
             {
                 status.IsReady = true;
                 status.LastReadyCheckedAtUtc = DateTime.UtcNow;
                 return;
             }
 
-            if (upper.Contains("NOT_READY") || upper.Contains("READY:0") || upper.Contains("READY=0"))
+            if (parsed.IsReady == false)
             {
                 status.IsReady = false;
                 status.LastReadyCheckedAtUtc = DateTime.UtcNow;
@@ -666,6 +694,63 @@ namespace PipeBendingDashboard.Communication
 
             if (DateTime.UtcNow - status.LastReadyCheckedAtUtc < _readyRefreshInterval) return;
             await CheckReadyAsync(client, status);
+        }
+
+        private static void ApplyParsedStatus(MachineStatus status, ParsedMachineStatus parsed)
+        {
+            var previous = status.Status;
+            status.LastEvent = parsed.IsUnloadComplete ? "UNLOAD_COMPLETE" : "";
+
+            if (parsed.Status == "ALARM")
+            {
+                status.Status = "ALARM";
+                status.HasAlarm = true;
+                status.IsReady = false;
+                if (!string.IsNullOrWhiteSpace(parsed.ErrorCode)) status.ErrorCode = parsed.ErrorCode;
+                return;
+            }
+
+            if (previous == "ALARM")
+            {
+                status.IsReady = false;
+                return;
+            }
+
+            if (parsed.IsUnloadComplete)
+            {
+                status.Status = "READY";
+                status.IsReady = true;
+                status.HasAlarm = false;
+                status.ErrorCode = "";
+                return;
+            }
+
+            if (parsed.Status == "WORKING")
+            {
+                status.Status = "WORKING";
+                status.HasAlarm = false;
+                status.ErrorCode = "";
+                status.IsReady = false;
+                return;
+            }
+
+            if (parsed.Status == "FINISH")
+            {
+                status.Status = "FINISH";
+                status.IsReady = false;
+                return;
+            }
+
+            // FINISH에서는 UNLOAD_COMPLETE 없이 READY로 직행 금지
+            if (previous == "FINISH" && parsed.Status == "READY")
+            {
+                status.Status = "FINISH";
+                status.IsReady = false;
+                return;
+            }
+
+            status.Status = "READY";
+            if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
         }
 
         private string? ValidateLineInterlock(string targetId, string cmdType)

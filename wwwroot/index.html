@@ -3756,6 +3756,8 @@ const LOADER_BUFFER_MAX = 2;
 let pipelineTimer = null;
 let stageSlots = {};      // { stepId: {pipeIdx, remain} | null }
 let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
+let demoActiveStep = null;
+let demoBendFlip = false;
 
 // 머신 번호 → ID 매핑
 const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
@@ -3797,6 +3799,8 @@ function initPipelineSlots(){
   stageSlots = {};
   const active = getActiveSteps();
   active.forEach(s=>stageSlots[s]=null);
+  demoActiveStep = null;
+  demoBendFlip = false;
 }
 
 function stageName(s){ return STEP_LABEL[s] || String(s); }
@@ -3860,8 +3864,76 @@ function updatePipelineVisual(){
   updateBendingIndependentVisual();
 }
 
+function pickDemoBendingTarget(active){
+  const cands = active.filter(s=>s===1 || s===6);
+  if(cands.length===0) return null;
+  if(cands.length===1) return cands[0];
+  demoBendFlip = !demoBendFlip;
+  return demoBendFlip ? 1 : 6;
+}
+
+function runDemoSequenceTick(){
+  if(!processRunning) return;
+  const active = getActiveSteps();
+  if(active.length===0) return;
+
+  // 현재 진행 슬롯 찾기(데모 모드에서는 1개만 운용)
+  if(!demoActiveStep || !stageSlots[demoActiveStep]){
+    demoActiveStep = active.find(s=>stageSlots[s]) || null;
+  }
+
+  if(!demoActiveStep){
+    const entry = active[0];
+    const pipeIdx = nextPipeFeedIdx;
+    stageSlots[entry] = { pipeIdx, remain: pickStepDuration(entry) };
+    demoActiveStep = entry;
+    updateViewersForPipe(pipeIdx);
+    appendPipeTrace(pipeIdx, `${stageName(entry)} 투입`);
+    setOpLog(`📥 [SIM] ${stageName(entry)} 투입: ${PIPE_DATA[pipeIdx % PIPE_DATA.length].id}${formatPipeTrace(pipeIdx)}`);
+    return updatePipelineVisual();
+  }
+
+  const slot = stageSlots[demoActiveStep];
+  if(!slot) return updatePipelineVisual();
+  slot.remain -= 250;
+  if(slot.remain > 0) return updatePipelineVisual();
+
+  const curr = demoActiveStep;
+  const currIdx = active.indexOf(curr);
+  let next = null;
+
+  if(curr===5){
+    next = pickDemoBendingTarget(active);
+  }else{
+    next = active[currIdx+1] || null;
+  }
+
+  if(next){
+    stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
+    stageSlots[curr] = null;
+    demoActiveStep = next;
+    appendPipeTrace(slot.pipeIdx, `${stageName(curr)}→${stageName(next)}`);
+    setOpLog(`↪ [SIM] ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: ${stageName(curr)} → ${stageName(next)}${formatPipeTrace(slot.pipeIdx)}`);
+    if(next===1 || next===6) updateViewersForPipe(slot.pipeIdx);
+  }else{
+    cycleCount++;
+    const c=document.getElementById('opCycles'); if(c) c.textContent=cycleCount;
+    appendPipeTrace(slot.pipeIdx, `${stageName(curr)} 완료`);
+    setOpLog(`✅ [SIM] ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id} 완료 (${stageName(curr)})${formatPipeTrace(slot.pipeIdx)}`);
+    stageSlots[curr] = null;
+    demoActiveStep = null;
+    nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
+  }
+
+  updatePipelineVisual();
+}
+
 function runPipelineTick(){
   if(!processRunning) return;
+  if(simModeOn){
+    runDemoSequenceTick();
+    return;
+  }
   scheduleLoaderPrefetch();
   const active = getActiveSteps();
   if(active.length===0) return;

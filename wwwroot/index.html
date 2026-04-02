@@ -382,6 +382,12 @@ body{transition:background .28s ease,color .28s ease}
 }
 .op-bend-span-2{grid-column:span 2 !important}
 .op-bend-span-1{grid-column:span 1 !important}
+.op-bend-host{
+  display:grid;
+  grid-template-rows:1fr 1fr;
+  gap:4px;
+  min-height:0;
+}
 .sett-hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));box-shadow:var(--shadow-soft)}
 .theme-pref-card{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border:1px solid var(--border2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-soft);flex-shrink:0}
 .theme-pref-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -3225,10 +3231,23 @@ function applyConfigToOperation(){
   const active=cfg.machines;
   const n=active.length;
   const grid=document.getElementById('opMachGrid');
-  if(grid) grid.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  const hasDualBend = active.includes(1) && active.includes(6);
+  if(grid) grid.style.gridTemplateColumns=`repeat(${hasDualBend ? Math.max(1,n-1) : n},1fr)`;
 
   const opB1=document.getElementById('opMachWrap1');
   const opB2=document.getElementById('opMachWrap6');
+  let bendHost=document.getElementById('opBendHost');
+  if(grid && !bendHost){
+    bendHost=document.createElement('div');
+    bendHost.id='opBendHost';
+    bendHost.className='op-bend-host';
+    bendHost.style.display='none';
+    grid.appendChild(bendHost);
+  }
+  if(grid && bendHost && !hasDualBend){
+    while(bendHost.firstChild) grid.appendChild(bendHost.firstChild);
+    bendHost.style.display='none';
+  }
   [opB1,opB2].forEach(el=>{
     if(!el) return;
     el.classList.remove('op-bend-span-1','op-bend-span-2');
@@ -3255,6 +3274,20 @@ function applyConfigToOperation(){
       const wrap=document.getElementById('opMachWrap'+i);
       if(wrap) grid.appendChild(wrap); // 마지막으로 이동하면서 순서 맞춤
     });
+
+    if(hasDualBend && bendHost && opB1 && opB2){
+      bendHost.style.display='grid';
+      bendHost.appendChild(opB1);
+      bendHost.appendChild(opB2);
+      const firstBendIdx = active.findIndex(id=>id===1 || id===6);
+      const beforeId = firstBendIdx>=0 ? active[firstBendIdx+1] : null;
+      const beforeWrap = beforeId ? document.getElementById('opMachWrap'+beforeId) : null;
+      if(beforeWrap && beforeWrap.parentElement===grid){
+        grid.insertBefore(bendHost, beforeWrap);
+      }else{
+        grid.appendChild(bendHost);
+      }
+    }
   }
 
   // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
@@ -3282,6 +3315,7 @@ function applyConfigToOperation(){
   if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
 
   applyConfigToWorkerLayout(active);
+  updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
 }
 
 function applyConfigToWorkerLayout(active){

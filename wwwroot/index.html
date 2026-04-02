@@ -5330,7 +5330,7 @@ const MACHINES=loadMachineSettings();
 let commWs=null, simModeOn=false;
 const simTimers={};
 const machSt={};
-MACHINES.forEach(m=>{machSt[m.id]={status:'IDLE',oee:0,speed:0,alarm:false,lastMsg:'—',connected:false,ready:false};});
+MACHINES.forEach(m=>{machSt[m.id]={status:'READY',oee:0,speed:0,alarm:false,errorCode:'',lastMsg:'—',connected:false,ready:false};});
 
 /* ── 시뮬레이션 틱 ── */
 function simTick(mid){
@@ -5338,16 +5338,16 @@ function simTick(mid){
   // 비활성 머신(타이머가 없는 머신)은 건너뜀
   if(!simTimers[mid]) return;
   // 시뮬 모드: C#에서 DOWN으로 설정됐어도 IDLE로 복구 (시뮬은 자체 상태 관리)
-  if(s.status==='DOWN') s.status='IDLE';
+  if(s.status==='ALARM') s.status='READY';
   s.connected = true;
   if(!s.lastMsg || s.lastMsg==='—' || s.lastMsg==='연결 실패') s.lastMsg='시뮬레이션 중';
-  if(s.status==='RUN'){
+  if(s.status==='WORKING'){
     s.oee=Math.min(99,(s.oee||80)+(Math.random()*1.5-0.5));
     s.speed=Math.max(0,(s.speed||100)+(Math.random()*5-2));
     if(Math.random()<0.015) s.alarm=true;
     s.lastMsg='가동 중 — OEE:'+s.oee.toFixed(1)+'% SPD:'+Math.round(s.speed);
   }
-  if(s.status==='IDLE'){s.oee=0;s.speed=0;}
+  if(s.status==='READY'){s.oee=0;s.speed=0;}
   renderCard(mid);
 }
 function startSim(){
@@ -5419,9 +5419,9 @@ function simCmd(target,code,param){
   setTimeout(()=>{
     ids.forEach(mid=>{
       const s=machSt[mid]; let resp='';
-      if(code==='START'){s.status='RUN';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
-      else if(code==='STOP'){s.status='IDLE';s.speed=0;resp='정지 완료';}
-      else if(code==='RESET'){s.status='IDLE';s.alarm=false;s.oee=0;s.speed=0;resp='리셋 완료';}
+      if(code==='START'){s.status='WORKING';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
+      else if(code==='STOP'){s.status='READY';s.speed=0;resp='정지 완료';}
+      else if(code==='RESET'){s.status='READY';s.alarm=false;s.errorCode='';s.oee=0;s.speed=0;resp='리셋 완료';}
       else if(code==='STATUS'){resp=`STATUS:${s.status} OEE:${s.oee.toFixed(1)}% SPD:${Math.round(s.speed)}`;}
       else if(code==='SPEED'){s.speed=parseInt(param)||100;resp='속도 설정: '+s.speed;}
       else if(code==='PIPE_ID'){resp='배관 ID 수신: '+param;}
@@ -5505,7 +5505,7 @@ function toggleSimMode(on){
     MACHINES.forEach(m=>{
       if(!activeOnIds.includes(m.id)) return;
       const s=machSt[m.id]; if(!s) return;
-      s.status='IDLE'; s.connected=true; s.alarm=false;
+      s.status='READY'; s.connected=true; s.alarm=false; s.errorCode='';
       s.oee=0; s.speed=0; s.lastMsg='시뮬레이션 중';
     });
     applyConfigToComm(); // 구성 반영 + 시뮬 타이머 시작
@@ -5650,14 +5650,13 @@ function renderCard(mid){
     return;
   }
 
-  const stColor = {RUN:'#73C59B',IDLE:'#72879E',DOWN:'#D37489',ALARM:'#CBAF6D',MANUAL:'#8E7BCF'}
-                  [s.alarm?'ALARM':s.status] || '#72879E';
-  const stTxt   = {RUN:'가동 중',IDLE:'대기',DOWN:'다운',ALARM:'알람',MANUAL:'수동'}
-                  [s.alarm?'ALARM':s.status] || s.status;
+  const effStatus = s.alarm ? 'ALARM' : s.status;
+  const stColor = {READY:'#73C59B',WORKING:'#6FB6C9',FINISH:'#CBAF6D',ALARM:'#D37489'}[effStatus] || '#72879E';
+  const stTxt   = {READY:'준비 완료',WORKING:'작업 중',FINISH:'가공 완료',ALARM:'알람'}[effStatus] || s.status;
 
   // 상태 dot
   const dot = document.getElementById('cdot_'+mid);
-  if(dot){ dot.style.background = stColor; dot.style.animation = s.status==='RUN'?'dotBlink .8s infinite':'none'; }
+  if(dot){ dot.style.background = stColor; dot.style.animation = effStatus==='WORKING'?'dotBlink .8s infinite':'none'; }
   // 상태 뱃지
   const stEl = document.getElementById('cst_'+mid);
   if(stEl){ stEl.textContent = stTxt; stEl.style.color = stColor; stEl.style.background = stColor+'22'; stEl.style.borderColor = stColor+'44'; }
@@ -5677,7 +5676,7 @@ function renderCard(mid){
   if(spdEl) spdEl.innerHTML = Math.round(s.speed)+'<span style="font-size:9px"> rpm</span>';
   // 알람
   const almEl = document.getElementById('calm_'+mid);
-  if(almEl){ almEl.textContent = s.alarm?'⚠':'—'; almEl.style.color = s.alarm?'var(--red)':'var(--dim)'; }
+  if(almEl){ almEl.textContent = s.alarm?('⚠ '+(s.errorCode||'ALARM')):'—'; almEl.style.color = s.alarm?'var(--red)':'var(--dim)'; }
   // IP/Port
   const ipEl = document.getElementById('cip_'+mid); if(ipEl) ipEl.textContent = m.ip;
   const pEl  = document.getElementById('cport_'+mid); if(pEl) pEl.textContent = m.port;
@@ -5862,7 +5861,7 @@ function _applyConfigToCommNow(){
       if(!activeIds.includes(id)){
         clearInterval(simTimers[id]); simTimers[id] = null;
         // 비활성 machSt 초기화
-        const s = machSt[id]; if(s){ s.status='IDLE'; s.connected=false; s.oee=0; s.speed=0; }
+        const s = machSt[id]; if(s){ s.status='READY'; s.connected=false; s.ready=false; s.oee=0; s.speed=0; }
       }
     });
     activeIds.forEach(id => {
@@ -6761,8 +6760,13 @@ window.onCSharpMessage = function(msg){
         const wasConnected = st.connected;
         st.connected = m.isConnected;
         if(m.status)      st.status   = m.status;
-        if(m.hasAlarm)    st.alarm    = true;
+        st.ready = !!m.isReady;
+        st.alarm = !!m.hasAlarm || st.status === 'ALARM';
+        st.errorCode = m.errorCode || '';
         if(m.lastMessage) st.lastMsg  = m.lastMessage;
+        if(m.status === 'FINISH' && m.lastEvent === 'UNLOAD_COMPLETE'){
+          st.lastMsg = (st.lastMsg ? st.lastMsg + ' | ' : '') + 'UNLOAD_COMPLETE';
+        }
         if(m.speed != null) st.speed  = m.speed;
         if(m.oee   != null) st.oee    = m.oee;
 
@@ -6831,11 +6835,11 @@ window.onCSharpMessage = function(msg){
       if(st){
         st.lastMsg = response;
         if(isOk){
-          if(cmdType==='START') st.status='RUN';
-          if(cmdType==='STOP')  st.status='IDLE';
-          if(cmdType==='RESET'){st.status='IDLE'; st.alarm=false;}
+          if(cmdType==='START') st.status='WORKING';
+          if(cmdType==='STOP')  st.status='READY';
+          if(cmdType==='RESET'){st.status='READY'; st.alarm=false; st.errorCode='';}
         }
-        if(isErr) st.alarm = true;
+        if(isErr){ st.alarm = true; st.status='ALARM'; }
         // 편집 중인 카드는 재렌더 안 함
         if(!_cardEditing[machineId]) renderCard(machineId);
       }

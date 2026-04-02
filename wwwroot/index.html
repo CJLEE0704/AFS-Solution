@@ -375,10 +375,19 @@ body{transition:background .28s ease,color .28s ease}
 .worker-mach.cutting{background:var(--cutting-bg)}
 .worker-mach.laser{background:var(--laser-bg)}
 .worker-mach.bending{background:var(--bending-bg)}
-.bend-layout-single{flex:1.8 !important;min-height:120px !important}
-.bend-layout-dual{flex:1 !important;min-height:0 !important}
+.bend-layout-single{flex:1 !important;min-height:0 !important}
+.bend-layout-dual{
+  flex:var(--bend-dual-flex,0.8) !important;
+  min-height:var(--bend-dual-min,64px) !important;
+}
 .op-bend-span-2{grid-column:span 2 !important}
 .op-bend-span-1{grid-column:span 1 !important}
+.op-bend-host{
+  display:grid;
+  grid-template-rows:1fr 1fr;
+  gap:4px;
+  min-height:0;
+}
 .sett-hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));box-shadow:var(--shadow-soft)}
 .theme-pref-card{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border:1px solid var(--border2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-soft);flex-shrink:0}
 .theme-pref-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -3222,10 +3231,23 @@ function applyConfigToOperation(){
   const active=cfg.machines;
   const n=active.length;
   const grid=document.getElementById('opMachGrid');
-  if(grid) grid.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  const hasDualBend = active.includes(1) && active.includes(6);
+  if(grid) grid.style.gridTemplateColumns=`repeat(${hasDualBend ? Math.max(1,n-1) : n},1fr)`;
 
   const opB1=document.getElementById('opMachWrap1');
   const opB2=document.getElementById('opMachWrap6');
+  let bendHost=document.getElementById('opBendHost');
+  if(grid && !bendHost){
+    bendHost=document.createElement('div');
+    bendHost.id='opBendHost';
+    bendHost.className='op-bend-host';
+    bendHost.style.display='none';
+    grid.appendChild(bendHost);
+  }
+  if(grid && bendHost && !hasDualBend){
+    while(bendHost.firstChild) grid.appendChild(bendHost.firstChild);
+    bendHost.style.display='none';
+  }
   [opB1,opB2].forEach(el=>{
     if(!el) return;
     el.classList.remove('op-bend-span-1','op-bend-span-2');
@@ -3252,6 +3274,20 @@ function applyConfigToOperation(){
       const wrap=document.getElementById('opMachWrap'+i);
       if(wrap) grid.appendChild(wrap); // 마지막으로 이동하면서 순서 맞춤
     });
+
+    if(hasDualBend && bendHost && opB1 && opB2){
+      bendHost.style.display='grid';
+      bendHost.appendChild(opB1);
+      bendHost.appendChild(opB2);
+      const firstBendIdx = active.findIndex(id=>id===1 || id===6);
+      const beforeId = firstBendIdx>=0 ? active[firstBendIdx+1] : null;
+      const beforeWrap = beforeId ? document.getElementById('opMachWrap'+beforeId) : null;
+      if(beforeWrap && beforeWrap.parentElement===grid){
+        grid.insertBefore(bendHost, beforeWrap);
+      }else{
+        grid.appendChild(bendHost);
+      }
+    }
   }
 
   // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
@@ -3279,13 +3315,17 @@ function applyConfigToOperation(){
   if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
 
   applyConfigToWorkerLayout(active);
+  updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
 }
 
 function applyConfigToWorkerLayout(active){
   const wMap={4:'wMach4',3:'wMach3',2:'wMach2',5:'wMach5',1:'wMach1',6:'wMach6'};
+  const viewer=document.getElementById('workerViewer');
   Object.values(wMap).forEach(wid=>{
     const el=document.getElementById(wid); if(!el) return;
     el.classList.remove('bend-layout-single','bend-layout-dual');
+    el.style.removeProperty('--bend-dual-flex');
+    el.style.removeProperty('--bend-dual-min');
   });
 
   Object.entries(wMap).forEach(([id, wid])=>{
@@ -3304,14 +3344,30 @@ function applyConfigToWorkerLayout(active){
       wB2.style.display='block';
       wB1.classList.add('bend-layout-dual');
       wB2.classList.add('bend-layout-dual');
+      tuneWorkerDualBendingLayout();
+      if(viewer){
+        viewer.style.flex='0.88';
+        viewer.style.minHeight='0';
+      }
     }else if(hasB1 && !hasB2){
       wB1.style.display='block';
       wB2.style.display='none';
       wB1.classList.add('bend-layout-single');
+      if(viewer){
+        viewer.style.flex='1';
+        viewer.style.minHeight='0';
+      }
     }else if(!hasB1 && hasB2){
       wB1.style.display='none';
       wB2.style.display='block';
       wB2.classList.add('bend-layout-single');
+      if(viewer){
+        viewer.style.flex='1';
+        viewer.style.minHeight='0';
+      }
+    }else if(viewer){
+      viewer.style.flex='1';
+      viewer.style.minHeight='0';
     }
   }
 
@@ -3330,6 +3386,31 @@ function applyConfigToWorkerLayout(active){
       opB2.classList.remove('op-bend-span-1');
       opB2.classList.add('op-bend-span-2');
     }
+  }
+}
+
+function tuneWorkerDualBendingLayout(){
+  const col=document.getElementById('workerMachCol');
+  const b1=document.getElementById('wMach1');
+  const b2=document.getElementById('wMach6');
+  if(!col || !b1 || !b2) return;
+  if(b1.style.display==='none' || b2.style.display==='none') return;
+
+  const colH=col.clientHeight || 0;
+  if(colH<=0) return;
+  const gap=6;
+  const staticCount=4; // loader/cutting/laser/robot
+  const base=(colH-gap*(staticCount+1))/6;
+  const minH=Math.max(58, Math.floor(base*0.68));
+
+  let scale=0.80;
+  for(let i=0;i<4;i++){
+    [b1,b2].forEach(el=>{
+      el.style.setProperty('--bend-dual-flex', scale.toFixed(3));
+      el.style.setProperty('--bend-dual-min', `${minH}px`);
+    });
+    if(col.scrollHeight<=col.clientHeight+1) break;
+    scale=Math.max(0.68, scale-0.04);
   }
 }
 
@@ -6317,6 +6398,7 @@ const _machPipeAnimState = {}; // key: pipeId(wPipe1/oPipe1...) -> {active:boole
 
 function updateWorkerMachines(step, slots=null){
   const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
+  const activeSet=new Set(getActiveSteps());
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
@@ -6325,7 +6407,7 @@ function updateWorkerMachines(step, slots=null){
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning, stagePipeIdx);
+    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
@@ -6334,20 +6416,38 @@ function updateWorkerMachines(step, slots=null){
     svg.innerHTML=MSVG[i](step===i);   // MSVG 먼저
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx); // 배관은 그 다음
+    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
   });
 }
 
 // ── 내부 헬퍼: 특정 머신 SVG에 파이프 애니메이션 적용 ──
-function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null){
+function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null, activeSet=null){
   const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
   _machPipeAnimState[pipeId] = st;
+  const isConfigured = activeSet ? activeSet.has(machIdx) : true;
+  const idleMode = activeStep===0;
 
   if(activeStep !== machIdx){
     if(st.active){
       const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
       const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
       st.active=false; st.pipeIdx=null;
+    }
+    if(!isConfigured){
+      const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
+      const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
+      return;
+    }
+    if(idleMode && isConfigured){
+      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:0}[machIdx] || 0) + 30);
+      let ghost=svg.querySelector('#'+pipeId);
+      if(!ghost){
+        ghost=buildWorkerStraightPipe(svg, pipeId, idleX);
+      }else{
+        ghost.setAttribute('transform',`translate(${idleX},0)`);
+      }
+      ghost.style.opacity='0.28';
+      ghost.style.filter='saturate(0.72)';
     }
     return;
   }
@@ -6487,6 +6587,7 @@ window.onload=function(){
   window.addEventListener('resize',()=>{
     if(activeMenu==='dashboard')drawWeekly();
     if(activeMenu==='datacenter'){drawDcChart();drawDcPie();}
+    tuneWorkerDualBendingLayout();
   });
 };
 

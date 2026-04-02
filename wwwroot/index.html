@@ -375,10 +375,19 @@ body{transition:background .28s ease,color .28s ease}
 .worker-mach.cutting{background:var(--cutting-bg)}
 .worker-mach.laser{background:var(--laser-bg)}
 .worker-mach.bending{background:var(--bending-bg)}
-.bend-layout-single{flex:1.8 !important;min-height:120px !important}
-.bend-layout-dual{flex:1 !important;min-height:0 !important}
+.bend-layout-single{flex:1 !important;min-height:0 !important}
+.bend-layout-dual{
+  flex:var(--bend-dual-flex,0.8) !important;
+  min-height:var(--bend-dual-min,64px) !important;
+}
 .op-bend-span-2{grid-column:span 2 !important}
 .op-bend-span-1{grid-column:span 1 !important}
+.op-bend-host{
+  display:grid;
+  grid-template-rows:1fr 1fr;
+  gap:4px;
+  min-height:0;
+}
 .sett-hero{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));box-shadow:var(--shadow-soft)}
 .theme-pref-card{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));border:1px solid var(--border2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:var(--shadow-soft);flex-shrink:0}
 .theme-pref-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -997,7 +1006,7 @@ body::before{
             <div id="opBendBadge6" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C #2</div>
           </div>
           <div id="opMachWrap5" style="background:#102235;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
-            <svg id="opMach5" viewBox="0 0 360 280" style="width:100%;height:100%"></svg>
+            <svg id="opMach5" viewBox="780 30 300 280" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#63AEC9">Moving Robot</div>
           </div>
         </div>
@@ -1386,7 +1395,7 @@ body::before{
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#C8926330;color:#C89263;font-weight:700;border:1px solid #C8926344">Laser Marking</div>
         </div>
         <div id="wMach5" class="worker-mach" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:#102235;border:1px solid var(--border)">
-          <svg viewBox="0 0 360 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
+          <svg viewBox="780 30 300 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#63AEC930;color:#63AEC9;font-weight:700;border:1px solid #63AEC944">Moving Robot</div>
         </div>
         <div id="wMach1" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
@@ -2579,21 +2588,21 @@ const MSVG={
   1:a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `,
 };
 MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
-MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
-<rect x="20" y="30" width="320" height="220" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
-<rect x="60" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="105" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 105 163" to="360 105 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<circle cx="255" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 255 163" to="360 255 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<rect x="155" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="155;168;155" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
-<line x1="105" y1="163" x2="180" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="180;193;180" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="205;218;205" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(20,30,320,220,10,'#63AEC9')}${mkScan(21,31,318,218,'#63AEC9')}${mkBadge(26,35,'#1b4660')}`:''}`;
+MSVG[5]=a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
+<rect x="780" y="30" width="300" height="280" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
+<rect x="800" y="87" width="260" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
+<circle cx="835" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 835 155" to="360 835 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<circle cx="1025" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1025 155" to="360 1025 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<rect x="900" y="134" width="60" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="900;914;900" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
+<line x1="835" y1="155" x2="930" y2="149" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;944;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<line x1="960" y1="149" x2="1025" y2="155" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="960;974;960" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="32" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
 
 const FLOW_MACHINE_BBOX = {
   4:{x:10,y:30,w:330,h:280},
   3:{x:410,y:30,w:300,h:280},
   2:{x:780,y:30,w:300,h:280},
-  5:{x:20,y:30,w:320,h:220},
+  5:{x:780,y:30,w:300,h:280},
   1:{x:1150,y:30,w:400,h:280},
   6:{x:1150,y:30,w:400,h:280},
 };
@@ -3222,10 +3231,23 @@ function applyConfigToOperation(){
   const active=cfg.machines;
   const n=active.length;
   const grid=document.getElementById('opMachGrid');
-  if(grid) grid.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  const hasDualBend = active.includes(1) && active.includes(6);
+  if(grid) grid.style.gridTemplateColumns=`repeat(${hasDualBend ? Math.max(1,n-1) : n},1fr)`;
 
   const opB1=document.getElementById('opMachWrap1');
   const opB2=document.getElementById('opMachWrap6');
+  let bendHost=document.getElementById('opBendHost');
+  if(grid && !bendHost){
+    bendHost=document.createElement('div');
+    bendHost.id='opBendHost';
+    bendHost.className='op-bend-host';
+    bendHost.style.display='none';
+    grid.appendChild(bendHost);
+  }
+  if(grid && bendHost && !hasDualBend){
+    while(bendHost.firstChild) grid.appendChild(bendHost.firstChild);
+    bendHost.style.display='none';
+  }
   [opB1,opB2].forEach(el=>{
     if(!el) return;
     el.classList.remove('op-bend-span-1','op-bend-span-2');
@@ -3242,7 +3264,11 @@ function applyConfigToOperation(){
       if(active.includes(i)){
         wrap.style.display='block';
         const svg=document.getElementById('opMach'+i);
-        if(svg) svg.innerHTML=MSVG[i](currentStep===i);
+        if(svg){
+          const activeFlag = currentStep===i ? '1' : '0';
+          svg.innerHTML=MSVG[i](currentStep===i);
+          svg.dataset.machineActive = activeFlag;
+        }
       } else {
         wrap.style.display='none';
       }
@@ -3252,6 +3278,20 @@ function applyConfigToOperation(){
       const wrap=document.getElementById('opMachWrap'+i);
       if(wrap) grid.appendChild(wrap); // 마지막으로 이동하면서 순서 맞춤
     });
+
+    if(hasDualBend && bendHost && opB1 && opB2){
+      bendHost.style.display='grid';
+      bendHost.appendChild(opB1);
+      bendHost.appendChild(opB2);
+      const firstBendIdx = active.findIndex(id=>id===1 || id===6);
+      const beforeId = firstBendIdx>=0 ? active[firstBendIdx+1] : null;
+      const beforeWrap = beforeId ? document.getElementById('opMachWrap'+beforeId) : null;
+      if(beforeWrap && beforeWrap.parentElement===grid){
+        grid.insertBefore(bendHost, beforeWrap);
+      }else{
+        grid.appendChild(bendHost);
+      }
+    }
   }
 
   // flowSvg: 활성 공정 수에 맞춰 머신/화살표/배관 정렬 동기화
@@ -3279,13 +3319,17 @@ function applyConfigToOperation(){
   if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
 
   applyConfigToWorkerLayout(active);
+  updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
 }
 
 function applyConfigToWorkerLayout(active){
   const wMap={4:'wMach4',3:'wMach3',2:'wMach2',5:'wMach5',1:'wMach1',6:'wMach6'};
+  const viewer=document.getElementById('workerViewer');
   Object.values(wMap).forEach(wid=>{
     const el=document.getElementById(wid); if(!el) return;
     el.classList.remove('bend-layout-single','bend-layout-dual');
+    el.style.removeProperty('--bend-dual-flex');
+    el.style.removeProperty('--bend-dual-min');
   });
 
   Object.entries(wMap).forEach(([id, wid])=>{
@@ -3304,14 +3348,30 @@ function applyConfigToWorkerLayout(active){
       wB2.style.display='block';
       wB1.classList.add('bend-layout-dual');
       wB2.classList.add('bend-layout-dual');
+      tuneWorkerDualBendingLayout();
+      if(viewer){
+        viewer.style.flex='0.88';
+        viewer.style.minHeight='0';
+      }
     }else if(hasB1 && !hasB2){
       wB1.style.display='block';
       wB2.style.display='none';
       wB1.classList.add('bend-layout-single');
+      if(viewer){
+        viewer.style.flex='1';
+        viewer.style.minHeight='0';
+      }
     }else if(!hasB1 && hasB2){
       wB1.style.display='none';
       wB2.style.display='block';
       wB2.classList.add('bend-layout-single');
+      if(viewer){
+        viewer.style.flex='1';
+        viewer.style.minHeight='0';
+      }
+    }else if(viewer){
+      viewer.style.flex='1';
+      viewer.style.minHeight='0';
     }
   }
 
@@ -3330,6 +3390,31 @@ function applyConfigToWorkerLayout(active){
       opB2.classList.remove('op-bend-span-1');
       opB2.classList.add('op-bend-span-2');
     }
+  }
+}
+
+function tuneWorkerDualBendingLayout(){
+  const col=document.getElementById('workerMachCol');
+  const b1=document.getElementById('wMach1');
+  const b2=document.getElementById('wMach6');
+  if(!col || !b1 || !b2) return;
+  if(b1.style.display==='none' || b2.style.display==='none') return;
+
+  const colH=col.clientHeight || 0;
+  if(colH<=0) return;
+  const gap=6;
+  const staticCount=4; // loader/cutting/laser/robot
+  const base=(colH-gap*(staticCount+1))/6;
+  const minH=Math.max(58, Math.floor(base*0.68));
+
+  let scale=0.80;
+  for(let i=0;i<4;i++){
+    [b1,b2].forEach(el=>{
+      el.style.setProperty('--bend-dual-flex', scale.toFixed(3));
+      el.style.setProperty('--bend-dual-min', `${minH}px`);
+    });
+    if(col.scrollHeight<=col.clientHeight+1) break;
+    scale=Math.max(0.68, scale-0.04);
   }
 }
 
@@ -3715,11 +3800,23 @@ function initPipelineSlots(){
 
 function stageName(s){ return STEP_LABEL[s] || String(s); }
 
+function isStepReady(stepId){
+  if(simModeOn) return true;
+  const machineId = MACHINE_ID_MAP[stepId];
+  if(!machineId) return true;
+  const st = machSt[machineId];
+  return !!(st && st.ready);
+}
+
+function canReceivePipe(stepId){
+  return !!stepId && !stageSlots[stepId] && isStepReady(stepId);
+}
+
 function chooseReadyBending(active){
   const cands = active.filter(s=>s===1 || s===6);
   if(cands.length===0) return null;
-  // 빈 슬롯 우선
-  const idle = cands.filter(s=>!stageSlots[s]);
+  // 빈 슬롯 + Ready 장비 우선
+  const idle = cands.filter(s=>canReceivePipe(s));
   if(idle.length===1) return idle[0];
   if(idle.length===2){
     // 양쪽 모두 비어있으면 교대 분배
@@ -3757,6 +3854,7 @@ function updatePipelineVisual(){
 
 function runPipelineTick(){
   if(!processRunning) return;
+  scheduleLoaderPrefetch();
   const active = getActiveSteps();
   if(active.length===0) return;
   const entryStep = active[0];
@@ -3786,7 +3884,7 @@ function runPipelineTick(){
     // Robot -> Bending 분기
     if(s===5){
       const target = chooseReadyBending(active);
-      if(target && !stageSlots[target]){
+      if(target){
         stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
         appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
@@ -3797,7 +3895,7 @@ function runPipelineTick(){
 
     // 일반 다음 공정 이동
     const next = active[i+1];
-    if(next && !stageSlots[next]){
+    if(canReceivePipe(next)){
       stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
       appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
       stageSlots[s] = null;
@@ -3805,11 +3903,16 @@ function runPipelineTick(){
   }
 
   // 3) Loader 투입 (지속 공급)
-  if(entryStep && !stageSlots[entryStep]){
+  if(canReceivePipe(entryStep) && (entryStep!==4 || loaderBufferCount>0)){
     stageSlots[entryStep] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(entryStep) };
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
     appendPipeTrace(nextPipeFeedIdx, `${stageName(entryStep)} 투입`);
     setOpLog(`📥 ${stageName(entryStep)} 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
+    if(entryStep===4){
+      loaderBufferCount = Math.max(0, loaderBufferCount-1);
+      updateLoaderReadyVisual();
+      scheduleLoaderPrefetch();
+    }
     nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
   }
 
@@ -6230,7 +6333,7 @@ const wPipeState={};  // {machId: {el, curX}}
 const W_VBMAP={
   1:'1140 20 420 300',  // Bending M/C — 높이 300으로 확장
   6:'1140 20 420 300',
-  5:'0 0 360 280',
+  5:'780 30 300 280',
   2:'780 30 300 250',
   3:'410 30 300 250',
   4:'10 30 330 250'
@@ -6317,6 +6420,7 @@ const _machPipeAnimState = {}; // key: pipeId(wPipe1/oPipe1...) -> {active:boole
 
 function updateWorkerMachines(step, slots=null){
   const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
+  const activeSet=new Set(getActiveSteps());
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
@@ -6325,23 +6429,31 @@ function updateWorkerMachines(step, slots=null){
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning, stagePipeIdx);
+    const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
+    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,activeStageStep,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const svg=document.getElementById('opMach'+i); if(!svg) return;
-    svg.innerHTML=MSVG[i](step===i);   // MSVG 먼저
+    const activeFlag = step===i ? '1' : '0';
+    if(svg.dataset.machineActive !== activeFlag){
+      svg.innerHTML=MSVG[i](step===i);   // 상태 변화 시에만 재렌더
+      svg.dataset.machineActive = activeFlag;
+    }
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx); // 배관은 그 다음
+    const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
+    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
   });
 }
 
 // ── 내부 헬퍼: 특정 머신 SVG에 파이프 애니메이션 적용 ──
-function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null){
+function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null, activeSet=null){
   const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
   _machPipeAnimState[pipeId] = st;
+  const isConfigured = activeSet ? activeSet.has(machIdx) : true;
+  const idleMode = activeStep===0;
 
   if(activeStep !== machIdx){
     if(st.active){
@@ -6349,12 +6461,33 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
       const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
       st.active=false; st.pipeIdx=null;
     }
+    if(!isConfigured){
+      const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
+      const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
+      return;
+    }
+    if(idleMode && isConfigured){
+      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0) + 30);
+      let ghost=svg.querySelector('#'+pipeId);
+      if(!ghost){
+        ghost=buildWorkerStraightPipe(svg, pipeId, idleX);
+      }else{
+        ghost.setAttribute('transform',`translate(${idleX},0)`);
+      }
+      ghost.style.opacity='0.28';
+      ghost.style.filter='saturate(0.72)';
+    }
     return;
   }
 
   const visualPipeIdx = stagePipeIdx!=null ? stagePipeIdx : opPipeIdx;
   if(st.active && st.pipeIdx === visualPipeIdx){
-    return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
+    const liveP=svg.querySelector('#'+pipeId);
+    const liveB=svg.querySelector('#'+bendId);
+    if(liveP || liveB){
+      return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
+    }
+    st.active=false;
   }
 
   // 기존 엘리먼트 제거
@@ -6366,7 +6499,7 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
 
   // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
   // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
-  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:0}[machIdx] || 0;
+  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
   const entryX = vbLeft - PIPE_LEN - 30;   // 화면 왼쪽 바깥
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
 
@@ -6487,6 +6620,7 @@ window.onload=function(){
   window.addEventListener('resize',()=>{
     if(activeMenu==='dashboard')drawWeekly();
     if(activeMenu==='datacenter'){drawDcChart();drawDcPie();}
+    tuneWorkerDualBendingLayout();
   });
 };
 

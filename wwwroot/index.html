@@ -2590,13 +2590,13 @@ const MSVG={
 MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
 MSVG[5]=a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
 <rect x="780" y="30" width="300" height="280" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
-<rect x="810" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="850" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 850 163" to="360 850 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<circle cx="1010" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1010 163" to="360 1010 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<rect x="905" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="905;918;905" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
-<line x1="850" y1="163" x2="930" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;943;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<line x1="955" y1="157" x2="1010" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="955;968;955" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
+<rect x="800" y="95" width="260" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
+<circle cx="835" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 835 163" to="360 835 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<circle cx="1025" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1025 163" to="360 1025 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<rect x="900" y="142" width="60" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="900;914;900" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
+<line x1="835" y1="163" x2="930" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;944;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<line x1="960" y1="157" x2="1025" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="960;974;960" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="32" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
 
 const FLOW_MACHINE_BBOX = {
   4:{x:10,y:30,w:330,h:280},
@@ -6411,7 +6411,8 @@ function updateWorkerMachines(step, slots=null){
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
+    const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
+    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,activeStageStep,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
@@ -6424,7 +6425,8 @@ function updateWorkerMachines(step, slots=null){
     }
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
-    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
+    const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
+    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
   });
 }
 
@@ -6447,7 +6449,7 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
       return;
     }
     if(idleMode && isConfigured){
-      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:0}[machIdx] || 0) + 30);
+      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0) + 30);
       let ghost=svg.querySelector('#'+pipeId);
       if(!ghost){
         ghost=buildWorkerStraightPipe(svg, pipeId, idleX);
@@ -6479,7 +6481,7 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
 
   // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
   // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
-  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:0}[machIdx] || 0;
+  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
   const entryX = vbLeft - PIPE_LEN - 30;   // 화면 왼쪽 바깥
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
 

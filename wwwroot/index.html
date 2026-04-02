@@ -3264,7 +3264,11 @@ function applyConfigToOperation(){
       if(active.includes(i)){
         wrap.style.display='block';
         const svg=document.getElementById('opMach'+i);
-        if(svg) svg.innerHTML=MSVG[i](currentStep===i);
+        if(svg){
+          const activeFlag = currentStep===i ? '1' : '0';
+          svg.innerHTML=MSVG[i](currentStep===i);
+          svg.dataset.machineActive = activeFlag;
+        }
       } else {
         wrap.style.display='none';
       }
@@ -6413,7 +6417,11 @@ function updateWorkerMachines(step, slots=null){
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const svg=document.getElementById('opMach'+i); if(!svg) return;
-    svg.innerHTML=MSVG[i](step===i);   // MSVG 먼저
+    const activeFlag = step===i ? '1' : '0';
+    if(svg.dataset.machineActive !== activeFlag){
+      svg.innerHTML=MSVG[i](step===i);   // 상태 변화 시에만 재렌더
+      svg.dataset.machineActive = activeFlag;
+    }
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
@@ -6454,7 +6462,12 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
 
   const visualPipeIdx = stagePipeIdx!=null ? stagePipeIdx : opPipeIdx;
   if(st.active && st.pipeIdx === visualPipeIdx){
-    return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
+    const liveP=svg.querySelector('#'+pipeId);
+    const liveB=svg.querySelector('#'+bendId);
+    if(liveP || liveB){
+      return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
+    }
+    st.active=false;
   }
 
   // 기존 엘리먼트 제거

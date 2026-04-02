@@ -2590,12 +2590,12 @@ const MSVG={
 MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
 MSVG[5]=a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
 <rect x="780" y="30" width="300" height="280" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
-<rect x="800" y="95" width="260" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="835" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 835 163" to="360 835 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<circle cx="1025" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1025 163" to="360 1025 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<rect x="900" y="142" width="60" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="900;914;900" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
-<line x1="835" y1="163" x2="930" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;944;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<line x1="960" y1="157" x2="1025" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="960;974;960" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<rect x="800" y="87" width="260" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
+<circle cx="835" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 835 155" to="360 835 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<circle cx="1025" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1025 155" to="360 1025 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<rect x="900" y="134" width="60" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="900;914;900" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
+<line x1="835" y1="155" x2="930" y2="149" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;944;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<line x1="960" y1="149" x2="1025" y2="155" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="960;974;960" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
 <text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="32" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
 
 const FLOW_MACHINE_BBOX = {
@@ -3800,11 +3800,23 @@ function initPipelineSlots(){
 
 function stageName(s){ return STEP_LABEL[s] || String(s); }
 
+function isStepReady(stepId){
+  if(simModeOn) return true;
+  const machineId = MACHINE_ID_MAP[stepId];
+  if(!machineId) return true;
+  const st = machSt[machineId];
+  return !!(st && st.ready);
+}
+
+function canReceivePipe(stepId){
+  return !!stepId && !stageSlots[stepId] && isStepReady(stepId);
+}
+
 function chooseReadyBending(active){
   const cands = active.filter(s=>s===1 || s===6);
   if(cands.length===0) return null;
-  // 빈 슬롯 우선
-  const idle = cands.filter(s=>!stageSlots[s]);
+  // 빈 슬롯 + Ready 장비 우선
+  const idle = cands.filter(s=>canReceivePipe(s));
   if(idle.length===1) return idle[0];
   if(idle.length===2){
     // 양쪽 모두 비어있으면 교대 분배
@@ -3842,6 +3854,7 @@ function updatePipelineVisual(){
 
 function runPipelineTick(){
   if(!processRunning) return;
+  scheduleLoaderPrefetch();
   const active = getActiveSteps();
   if(active.length===0) return;
   const entryStep = active[0];
@@ -3871,7 +3884,7 @@ function runPipelineTick(){
     // Robot -> Bending 분기
     if(s===5){
       const target = chooseReadyBending(active);
-      if(target && !stageSlots[target]){
+      if(target){
         stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
         appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
@@ -3882,7 +3895,7 @@ function runPipelineTick(){
 
     // 일반 다음 공정 이동
     const next = active[i+1];
-    if(next && !stageSlots[next]){
+    if(canReceivePipe(next)){
       stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
       appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
       stageSlots[s] = null;
@@ -3890,11 +3903,16 @@ function runPipelineTick(){
   }
 
   // 3) Loader 투입 (지속 공급)
-  if(entryStep && !stageSlots[entryStep]){
+  if(canReceivePipe(entryStep) && (entryStep!==4 || loaderBufferCount>0)){
     stageSlots[entryStep] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(entryStep) };
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
     appendPipeTrace(nextPipeFeedIdx, `${stageName(entryStep)} 투입`);
     setOpLog(`📥 ${stageName(entryStep)} 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
+    if(entryStep===4){
+      loaderBufferCount = Math.max(0, loaderBufferCount-1);
+      updateLoaderReadyVisual();
+      scheduleLoaderPrefetch();
+    }
     nextPipeFeedIdx = (nextPipeFeedIdx + 1) % PIPE_DATA.length;
   }
 

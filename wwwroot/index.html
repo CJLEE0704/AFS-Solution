@@ -6260,6 +6260,20 @@ function ensureWorkerPipeDefs(svg){
   flt.appendChild(bl);defs.appendChild(flt);
 }
 
+function ensureMachPipeLayer(svg){
+  let layer = svg.querySelector('g[data-layer="pipe-overlay"]');
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.setAttribute('data-layer','pipe-overlay');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer); // 항상 마지막 child로 유지(최상단 레이어)
+  }else if(svg.lastElementChild !== layer){
+    svg.appendChild(layer); // 머신 SVG 재구성 후에도 최상단 보장
+  }
+  return layer;
+}
+
 function buildWorkerStraightPipe(svg, gId, startX){
   const old=svg.getElementById ? svg.getElementById(gId) : svg.querySelector('#'+gId);
   if(old) old.remove();
@@ -6276,7 +6290,8 @@ function buildWorkerStraightPipe(svg, gId, startX){
   g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
   g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
   g.setAttribute('transform',`translate(${startX},0)`);
-  svg.appendChild(g);
+  const layer = ensureMachPipeLayer(svg);
+  layer.appendChild(g);
   return g;
 }
 
@@ -6402,7 +6417,8 @@ function _playMachBendAnim(machSvg, animId, shape, flagFn){
     mkP('rgba(215,232,245,0.82)', pw*0.28,-3,-3),
   ];
   layers.forEach(l=>g.appendChild(l));
-  machSvg.appendChild(g);
+  const layer = ensureMachPipeLayer(machSvg);
+  layer.appendChild(g);
 
   const nb=(shape.bends||[]).length;
   const TOTAL_DUR = nb===0?1200 : nb===1?2800 : nb===2?3800 : 4800;

@@ -3742,12 +3742,12 @@ function updatePipelineVisual(){
   currentStep = lead || 0;
   if(lead){
     updateFlow(lead);
-    updateWorkerMachines(lead);
+    updateWorkerMachines(lead, stageSlots);
     setDashStatus(true, `${stageName(lead)} 가동 중`, STEP_COL[lead] || 'var(--cyan)');
     setOpStatus(true, '가동 중', STEP_COL[lead] || 'var(--cyan)');
   }else{
     updateFlowIdle();
-    updateWorkerMachines(0);
+    updateWorkerMachines(0, stageSlots);
     setDashStatus(false,'대기 중');
     setOpStatus(false,'대기 중');
   }
@@ -6260,6 +6260,20 @@ function ensureWorkerPipeDefs(svg){
   flt.appendChild(bl);defs.appendChild(flt);
 }
 
+function ensureMachPipeLayer(svg){
+  let layer = svg.querySelector('g[data-layer="pipe-overlay"]');
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.setAttribute('data-layer','pipe-overlay');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer); // 항상 마지막 child로 유지(최상단 레이어)
+  }else if(svg.lastElementChild !== layer){
+    svg.appendChild(layer); // 머신 SVG 재구성 후에도 최상단 보장
+  }
+  return layer;
+}
+
 function buildWorkerStraightPipe(svg, gId, startX){
   const old=svg.getElementById ? svg.getElementById(gId) : svg.querySelector('#'+gId);
   if(old) old.remove();
@@ -6276,7 +6290,8 @@ function buildWorkerStraightPipe(svg, gId, startX){
   g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
   g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
   g.setAttribute('transform',`translate(${startX},0)`);
-  svg.appendChild(g);
+  const layer = ensureMachPipeLayer(svg);
+  layer.appendChild(g);
   return g;
 }
 
@@ -6298,7 +6313,9 @@ function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
 // 통합 머신 업데이트 — Worker(wm1-4) + Operation(opMach1-4) 동시 처리
 // 반드시 updateFlow() 호출 이후에 불러야 innerHTML 충돌 없음
 // ══════════════════════════════════════════════════════════════
-function updateWorkerMachines(step){
+const _machPipeAnimState = {}; // key: pipeId(wPipe1/oPipe1...) -> {active:boolean, pipeIdx:number|null}
+
+function updateWorkerMachines(step, slots=null){
   const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
@@ -6307,7 +6324,8 @@ function updateWorkerMachines(step){
     el.innerHTML=MSVG[i](step===i);
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
-    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning);
+    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
+    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,step,()=>processRunning||dashAutoRunning, stagePipeIdx);
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
@@ -6315,17 +6333,36 @@ function updateWorkerMachines(step){
     const svg=document.getElementById('opMach'+i); if(!svg) return;
     svg.innerHTML=MSVG[i](step===i);   // MSVG 먼저
     svg.setAttribute('viewBox',W_VBMAP[i]);
-    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning); // 배관은 그 다음
+    const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
+    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,step,()=>processRunning, stagePipeIdx); // 배관은 그 다음
   });
 }
 
 // ── 내부 헬퍼: 특정 머신 SVG에 파이프 애니메이션 적용 ──
-function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn){
+function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null){
+  const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
+  _machPipeAnimState[pipeId] = st;
+
+  if(activeStep !== machIdx){
+    if(st.active){
+      const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
+      const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
+      st.active=false; st.pipeIdx=null;
+    }
+    return;
+  }
+
+  const visualPipeIdx = stagePipeIdx!=null ? stagePipeIdx : opPipeIdx;
+  if(st.active && st.pipeIdx === visualPipeIdx){
+    return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
+  }
+
   // 기존 엘리먼트 제거
   const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
   const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
 
-  if(activeStep !== machIdx) return; // 이 머신이 활성 단계가 아니면 종료
+  st.active=true;
+  st.pipeIdx=visualPipeIdx;
 
   // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
   // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
@@ -6337,7 +6374,7 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn){
 
   if(machIdx === 1 || machIdx === 6){
     // 밴딩 머신: 진입 후 shape 애니메이션
-    const pipe = PIPE_DATA[opPipeIdx % PIPE_DATA.length];
+    const pipe = PIPE_DATA[visualPipeIdx % PIPE_DATA.length];
     const nums = pipe.id.match(/\d+/g);
     const shIdx = nums ? parseInt(nums[nums.length-1]) % SHAPES.length : 0;
     const shape = SHAPES[shIdx];
@@ -6380,7 +6417,8 @@ function _playMachBendAnim(machSvg, animId, shape, flagFn){
     mkP('rgba(215,232,245,0.82)', pw*0.28,-3,-3),
   ];
   layers.forEach(l=>g.appendChild(l));
-  machSvg.appendChild(g);
+  const layer = ensureMachPipeLayer(machSvg);
+  layer.appendChild(g);
 
   const nb=(shape.bends||[]).length;
   const TOTAL_DUR = nb===0?1200 : nb===1?2800 : nb===2?3800 : 4800;

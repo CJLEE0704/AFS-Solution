@@ -1006,7 +1006,7 @@ body::before{
             <div id="opBendBadge6" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C #2</div>
           </div>
           <div id="opMachWrap5" style="background:#102235;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
-            <svg id="opMach5" viewBox="0 0 360 280" style="width:100%;height:100%"></svg>
+            <svg id="opMach5" viewBox="780 30 300 280" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#63AEC9">Moving Robot</div>
           </div>
         </div>
@@ -1395,7 +1395,7 @@ body::before{
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#C8926330;color:#C89263;font-weight:700;border:1px solid #C8926344">Laser Marking</div>
         </div>
         <div id="wMach5" class="worker-mach" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:#102235;border:1px solid var(--border)">
-          <svg viewBox="0 0 360 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
+          <svg viewBox="780 30 300 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#63AEC930;color:#63AEC9;font-weight:700;border:1px solid #63AEC944">Moving Robot</div>
         </div>
         <div id="wMach1" class="worker-mach bending" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
@@ -2588,21 +2588,21 @@ const MSVG={
   1:a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `,
 };
 MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
-MSVG[5]=a=>`<rect x="20" y="30" width="320" height="220" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
-<rect x="20" y="30" width="320" height="220" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
-<rect x="60" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="105" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 105 163" to="360 105 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<circle cx="255" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 255 163" to="360 255 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<rect x="155" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="155;168;155" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
-<line x1="105" y1="163" x2="180" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="180;193;180" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<line x1="205" y1="157" x2="255" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="205;218;205" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<text x="180" y="230" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(20,30,320,220,10,'#63AEC9')}${mkScan(21,31,318,218,'#63AEC9')}${mkBadge(26,35,'#1b4660')}`:''}`;
+MSVG[5]=a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
+<rect x="780" y="30" width="300" height="280" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
+<rect x="810" y="95" width="240" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
+<circle cx="850" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 850 163" to="360 850 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<circle cx="1010" cy="163" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1010 163" to="360 1010 163" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
+<rect x="905" y="142" width="50" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="905;918;905" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
+<line x1="850" y1="163" x2="930" y2="157" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;943;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<line x1="955" y1="157" x2="1010" y2="163" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="955;968;955" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
+<text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="30" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
 
 const FLOW_MACHINE_BBOX = {
   4:{x:10,y:30,w:330,h:280},
   3:{x:410,y:30,w:300,h:280},
   2:{x:780,y:30,w:300,h:280},
-  5:{x:20,y:30,w:320,h:220},
+  5:{x:780,y:30,w:300,h:280},
   1:{x:1150,y:30,w:400,h:280},
   6:{x:1150,y:30,w:400,h:280},
 };
@@ -6311,7 +6311,7 @@ const wPipeState={};  // {machId: {el, curX}}
 const W_VBMAP={
   1:'1140 20 420 300',  // Bending M/C — 높이 300으로 확장
   6:'1140 20 420 300',
-  5:'0 0 360 280',
+  5:'780 30 300 280',
   2:'780 30 300 250',
   3:'410 30 300 250',
   4:'10 30 330 250'

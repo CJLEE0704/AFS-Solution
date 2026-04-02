@@ -1,3 +1,5 @@
+using System;
+
 namespace PipeBendingDashboard.Communication
 {
     /// <summary>
@@ -18,6 +20,7 @@ namespace PipeBendingDashboard.Communication
         public int    Port        { get; set; } = 0;
         /// <summary>Ready 확인 완료 여부 (TCP 연결 후 READY? 명령 OK 응답)</summary>
         public bool   IsReady     { get; set; } = false;
+        public DateTime LastReadyCheckedAtUtc { get; set; } = DateTime.MinValue;
     }
 
     /// <summary>

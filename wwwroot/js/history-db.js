@@ -20,11 +20,18 @@
 
   global.dcSearch=function(){ requestHistory(); };
   global.dcGetFiltered=function(){ return _historyProjects.length ? _historyProjects : (global._lastDhProjs || []); };
-  global.initDataHistory=function(){ requestHistory(); };
+  const origInitDataHistory=global.initDataHistory;
+  global.initDataHistory=function(){
+    // 최초 진입 시 기존 메모리 데이터로 즉시 3D 표시를 보장하고,
+    // 이후 DB 조회 결과로 리스트/상세를 덮어쓴다.
+    origInitDataHistory?.apply(this, arguments);
+    requestHistory();
+  };
 
   const origSelDhPipe=global.selDhPipe;
   global.selDhPipe=function(projId, pipeId){
-    if(_historyProjects.length){
+    const hasDbProj = _historyProjects.some(p=>p.id===projId);
+    if(_historyProjects.length && hasDbProj){
       const prevProjects=global.projects;
       try{
         global.projects=_historyProjects;

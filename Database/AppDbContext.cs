@@ -13,6 +13,9 @@ namespace PipeBendingDashboard.Database
         public DbSet<PipeEntity>             Pipes             { get; set; } = null!;
         public DbSet<ProductionRecordEntity> ProductionRecords { get; set; } = null!;
         public DbSet<PipeMachineLogEntity>   PipeMachineLogs   { get; set; } = null!;
+        public DbSet<PipeStageHistoryEntity> PipeStageHistories { get; set; } = null!;
+        public DbSet<AlarmHistoryEntity>     AlarmHistories     { get; set; } = null!;
+        public DbSet<AuditLogEntity>         AuditLogs          { get; set; } = null!;
         public DbSet<UserEntity>             Users             { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -43,6 +46,21 @@ namespace PipeBendingDashboard.Database
                 .WithMany()
                 .HasForeignKey(x => x.ProjectId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ProjectEntity>()
+                .HasIndex(x => x.ProjectName);
+            modelBuilder.Entity<PipeEntity>()
+                .HasIndex(x => new { x.ProjectId, x.Status });
+            modelBuilder.Entity<ProductionRecordEntity>()
+                .HasIndex(x => new { x.ProjectId, x.CompletedAt });
+            modelBuilder.Entity<PipeMachineLogEntity>()
+                .HasIndex(x => new { x.PipeId, x.MachineId, x.ProcessedAt });
+            modelBuilder.Entity<PipeStageHistoryEntity>()
+                .HasIndex(x => new { x.ProjectId, x.PipeId, x.StageId, x.StartedAt });
+            modelBuilder.Entity<AlarmHistoryEntity>()
+                .HasIndex(x => new { x.MachineId, x.StartedAt });
+            modelBuilder.Entity<AuditLogEntity>()
+                .HasIndex(x => new { x.UserId, x.CreatedAt });
         }
     }
 }

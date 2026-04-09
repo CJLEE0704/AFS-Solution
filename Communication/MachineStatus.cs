@@ -10,7 +10,9 @@ namespace PipeBendingDashboard.Communication
         public string MachineId   { get; set; } = "";
         public string MachineName { get; set; } = "";
         public bool   IsConnected { get; set; } = false;
-        public string Status      { get; set; } = "READY";   // READY / WORKING / FINISH / ALARM
+        public string Status      { get; set; } = "READY";   // READY / BUSY / DONE / FAULT / HOLD
+        public string StateCode   { get; set; } = "READY";
+        public string HoldReasonCode { get; set; } = "";
         public bool   HasAlarm    { get; set; } = false;
         public string ErrorCode   { get; set; } = "";
         public string LastEvent   { get; set; } = "";

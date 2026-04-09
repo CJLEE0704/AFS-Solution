@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PipeBendingDashboard.Database
@@ -12,6 +16,7 @@ namespace PipeBendingDashboard.Database
     {
         private readonly string _connStr;
         private bool _isAvailable = false;
+        private readonly ConcurrentQueue<Func<Task>> _pendingWrites = new();
 
         public bool IsAvailable => _isAvailable;
 
@@ -38,6 +43,8 @@ namespace PipeBendingDashboard.Database
                 await using var db = CreateContext();
                 await db.Database.OpenConnectionAsync();
                 await db.Database.CloseConnectionAsync();
+                var migrator = new DbMigrator(db);
+                await migrator.EnsureSchemaAsync();
                 _isAvailable = true;
                 System.Diagnostics.Debug.WriteLine("[DB] 연결 성공");
                 return true;
@@ -47,6 +54,36 @@ namespace PipeBendingDashboard.Database
                 _isAvailable = false;
                 System.Diagnostics.Debug.WriteLine($"[DB] 연결 실패: {ex.Message}");
                 return false;
+            }
+        }
+
+        private async Task ExecuteResilientWriteAsync(Func<AppDbContext, Task> action)
+        {
+            if (!_isAvailable) return;
+            try
+            {
+                await using var db = CreateContext();
+                await action(db);
+                await db.SaveChangesAsync();
+            }
+            catch
+            {
+                _pendingWrites.Enqueue(async () =>
+                {
+                    await using var retryDb = CreateContext();
+                    await action(retryDb);
+                    await retryDb.SaveChangesAsync();
+                });
+            }
+        }
+
+        public async Task FlushPendingWritesAsync(int maxBatch = 100)
+        {
+            for (var i = 0; i < maxBatch; i++)
+            {
+                if (!_pendingWrites.TryDequeue(out var work)) break;
+                try { await work(); }
+                catch { _pendingWrites.Enqueue(work); break; }
             }
         }
 
@@ -160,7 +197,7 @@ namespace PipeBendingDashboard.Database
 
         // ── 6. 배관 저장 (신규=true, 중복=false 반환) ────────────
         public async Task<bool> SavePipeAsync(string pipeId, string projectId, string projName,
-            string material, int size, string status)
+            string material, int size, string status, int? totalLength = null, string? pipeName = null)
         {
             if (!_isAvailable) return false;
             try
@@ -172,8 +209,10 @@ namespace PipeBendingDashboard.Database
                     PipeId    = pipeId,
                     ProjectId = projectId,
                     ProjName  = projName,
+                    PipeName  = pipeName,
                     Material  = material,
                     Size      = size,
+                    TotalLength = totalLength,
                     Status    = status,
                 });
                 await db.SaveChangesAsync();
@@ -217,6 +256,117 @@ namespace PipeBendingDashboard.Database
             {
                 System.Diagnostics.Debug.WriteLine($"[DB] 머신 이력 저장 실패: {ex.Message}");
             }
+        }
+
+        public async Task SavePipeStageHistoryAsync(
+            string pipeId, string projectId, string stageId, DateTime startedAt,
+            DateTime? endedAt, string result, string? holdReasonCode)
+        {
+            await ExecuteResilientWriteAsync(db =>
+            {
+                db.PipeStageHistories.Add(new PipeStageHistoryEntity
+                {
+                    PipeId = pipeId,
+                    ProjectId = projectId,
+                    StageId = stageId,
+                    StartedAt = startedAt,
+                    EndedAt = endedAt,
+                    Result = result,
+                    HoldReasonCode = holdReasonCode
+                });
+                return Task.CompletedTask;
+            });
+        }
+
+        public async Task SaveAlarmHistoryAsync(string machineId, string errorCode, string? message, DateTime startedAt, DateTime? clearedAt)
+        {
+            await ExecuteResilientWriteAsync(db =>
+            {
+                db.AlarmHistories.Add(new AlarmHistoryEntity
+                {
+                    MachineId = machineId,
+                    ErrorCode = errorCode,
+                    Message = message,
+                    StartedAt = startedAt,
+                    ClearedAt = clearedAt,
+                });
+                return Task.CompletedTask;
+            });
+        }
+
+        public async Task SaveAuditLogAsync(string? userId, string action, string? target, string? payload)
+        {
+            await ExecuteResilientWriteAsync(db =>
+            {
+                db.AuditLogs.Add(new AuditLogEntity
+                {
+                    UserId = userId,
+                    Action = action,
+                    Target = target,
+                    Payload = payload
+                });
+                return Task.CompletedTask;
+            });
+        }
+
+        public async Task<object[]> QueryHistoryAsync(DateTime? from, DateTime? to, string? projectId, string? status)
+        {
+            if (!_isAvailable) return Array.Empty<object>();
+            await using var db = CreateContext();
+            var q = db.Pipes.AsNoTracking().Join(
+                db.Projects.AsNoTracking(),
+                p => p.ProjectId,
+                pr => pr.ProjectId,
+                (p, pr) => new { p, pr });
+            if (from.HasValue) q = q.Where(x => x.p.UpdatedAt >= from.Value || x.p.CreatedAt >= from.Value);
+            if (to.HasValue) q = q.Where(x => x.p.UpdatedAt <= to.Value || x.p.CreatedAt <= to.Value);
+            if (!string.IsNullOrWhiteSpace(projectId)) q = q.Where(x => x.p.ProjectId == projectId);
+            if (!string.IsNullOrWhiteSpace(status) && status != "전체" && status != "all") q = q.Where(x => x.p.Status == status);
+
+            var rows = await q.OrderByDescending(x => x.p.UpdatedAt ?? x.p.CreatedAt).Take(1000)
+                .Select(x => new
+                {
+                    projectId = x.pr.ProjectId,
+                    name = x.pr.ProjectName,
+                    addedAt = x.pr.AddedAt.ToString("yyyy/MM/dd"),
+                    fileType = x.pr.FileType,
+                    pipe = new
+                    {
+                        id = x.p.PipeId,
+                        size = x.p.Size,
+                        material = x.p.Material,
+                        status = x.p.Status,
+                        totalLength = x.p.TotalLength ?? 0
+                    }
+                }).ToListAsync();
+            return rows.Cast<object>().ToArray();
+        }
+
+        public static string HashPassword(string plain)
+        {
+            var salt = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}:{plain}"));
+            return $"{salt}:{Convert.ToBase64String(bytes)}";
+        }
+
+        public static bool VerifyPassword(string plain, string hash)
+        {
+            var parts = hash.Split(':');
+            if (parts.Length != 2) return false;
+            var calc = SHA256.HashData(Encoding.UTF8.GetBytes($"{parts[0]}:{plain}"));
+            return Convert.ToBase64String(calc) == parts[1];
+        }
+
+        public async Task<(bool ok, string role, string userName)> AuthenticateAsync(string userId, string password)
+        {
+            if (!_isAvailable) return (false, "", "");
+            await using var db = CreateContext();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive);
+            if (user == null) return (false, "", "");
+            if (!VerifyPassword(password, user.PasswordHash)) return (false, "", "");
+            user.LastLogin = DateTime.Now;
+            await db.SaveChangesAsync();
+            return (true, user.Role, user.UserName);
         }
         public async Task SyncMachineSettingsAsync(string machineId, string ip, int port)
         {

@@ -41,6 +41,7 @@ namespace PipeBendingDashboard.Communication
         // ── 명령 ACK 직렬화 잠금 (동시 명령 방지) ───────────────
         private readonly SemaphoreSlim _cmdLock = new(1, 1);
         private readonly TimeSpan _readyRefreshInterval = TimeSpan.FromSeconds(1);
+        private readonly IReadOnlyDictionary<string, IMachineProtocolAdapter> _protocolAdapters;
 
         // ── 이벤트 ───────────────────────────────────────────────
         public event Action<string>?                     StatusUpdated;  // JSON
@@ -62,6 +63,7 @@ namespace PipeBendingDashboard.Communication
             int    pollIntervalMs = 100)
         {
             _pollIntervalMs = pollIntervalMs;
+            _protocolAdapters = MachineProtocolRegistry.BuildDefaults();
 
             // ── 저장 파일 우선 적용 (파일 없으면 파라미터 기본값 사용) ──
             var saved = LoadSettingsFromFile();
@@ -253,7 +255,8 @@ namespace PipeBendingDashboard.Communication
             }
             else
             {
-                status.Status      = "ALARM";
+                status.Status      = "FAULT";
+                status.StateCode   = "FAULT";
                 status.LastMessage = "연결 실패";
                 status.IsReady     = false;
                 status.HasAlarm    = true;
@@ -269,7 +272,9 @@ namespace PipeBendingDashboard.Communication
         {
             try
             {
-                var readyCmd = MachineProtocol.GetReady(status.MachineId);
+                var readyCmd = _protocolAdapters.TryGetValue(status.MachineId, out var adapter)
+                    ? adapter.GetReadyCommand()
+                    : MachineProtocol.GetReady(status.MachineId);
                 if (readyCmd == null) return;
 
                 System.Diagnostics.Debug.WriteLine($"[{status.MachineId}] Ready 확인 전송: {readyCmd.Trim()}");
@@ -348,12 +353,12 @@ namespace PipeBendingDashboard.Communication
             {
                 // 활성 머신만 폴링
                 var tasks = new List<Task>();
-                if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  MachineProtocol.Loader.Status));
-                if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, MachineProtocol.Cutting.Status));
-                if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   MachineProtocol.Laser.Status));
-                if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(PollOneAsync(_robotClient,   _status.Robot,   MachineProtocol.Robot.Status));
-                if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, MachineProtocol.Bending.Status));
-                if (_activeMachineIds.Contains("BENDING2")) tasks.Add(PollOneAsync(_bending2Client, _status.Bending2, MachineProtocol.Bending2.Status));
+                if (_activeMachineIds.Contains("LOADER"))  tasks.Add(PollOneAsync(_loaderClient,  _status.Loader,  _protocolAdapters["LOADER"].GetStatusCommand()));
+                if (_activeMachineIds.Contains("CUTTING")) tasks.Add(PollOneAsync(_cuttingClient, _status.Cutting, _protocolAdapters["CUTTING"].GetStatusCommand()));
+                if (_activeMachineIds.Contains("LASER"))   tasks.Add(PollOneAsync(_laserClient,   _status.Laser,   _protocolAdapters["LASER"].GetStatusCommand()));
+                if (_activeMachineIds.Contains("ROBOT"))   tasks.Add(PollOneAsync(_robotClient,   _status.Robot,   _protocolAdapters["ROBOT"].GetStatusCommand()));
+                if (_activeMachineIds.Contains("BENDING")) tasks.Add(PollOneAsync(_bendingClient, _status.Bending, _protocolAdapters["BENDING"].GetStatusCommand()));
+                if (_activeMachineIds.Contains("BENDING2")) tasks.Add(PollOneAsync(_bending2Client, _status.Bending2, _protocolAdapters["BENDING2"].GetStatusCommand()));
 
                 if (tasks.Count > 0) await Task.WhenAll(tasks);
                 NotifyStatusUpdate();
@@ -370,7 +375,8 @@ namespace PipeBendingDashboard.Communication
             {
                 status.IsConnected = false;
                 status.IsReady = false;
-                status.Status = "ALARM";
+                status.Status = "FAULT";
+                status.StateCode = "FAULT";
                 status.HasAlarm = true;
                 status.ErrorCode = "NET_DISCONNECTED";
                 status.LastMessage = "연결 끊김";
@@ -383,7 +389,8 @@ namespace PipeBendingDashboard.Communication
                 {
                     status.IsConnected = false;
                     status.IsReady = false;
-                    status.Status = "ALARM";
+                    status.Status = "FAULT";
+                status.StateCode = "FAULT";
                     status.HasAlarm = true;
                     status.ErrorCode = "NET_NO_RESPONSE";
                     status.LastMessage = "응답 없음";
@@ -391,7 +398,10 @@ namespace PipeBendingDashboard.Communication
                 }
                 status.IsConnected  = true;
                 status.LastMessage  = response.Trim();
-                ApplyParsedStatus(status, MachineProtocol.ParseStatusResponse(response));
+                var parsed = _protocolAdapters.TryGetValue(status.MachineId, out var adapter)
+                    ? adapter.ParseStatus(response)
+                    : MachineProtocol.ParseStatusResponse(response);
+                ApplyParsedStatus(status, parsed);
                 if (TryParseValue(response, "SPEED:", out double spd)) status.Speed = spd;
                 if (TryParseValue(response, "OEE:",   out double oee)) status.Oee   = oee;
                 await RefreshReadyStateAsync(client, status, response);
@@ -400,7 +410,8 @@ namespace PipeBendingDashboard.Communication
             {
                 status.IsConnected = false;
                 status.IsReady = false;
-                status.Status = "ALARM";
+                status.Status = "FAULT";
+                status.StateCode = "FAULT";
                 status.HasAlarm = true;
                 status.ErrorCode = "NET_EXCEPTION";
                 status.LastMessage = ex.Message;
@@ -451,34 +462,8 @@ namespace PipeBendingDashboard.Communication
                 return;
             }
 
-            var protocol = (cmd.Type.ToUpper(), cmd.Target.ToUpper()) switch
-            {
-                ("START",  "LOADER")  => MachineProtocol.Loader.Start,
-                ("STOP",   "LOADER")  => MachineProtocol.Loader.Stop,
-                ("RESET",  "LOADER")  => MachineProtocol.Loader.Reset,
-                ("STATUS", "LOADER")  => MachineProtocol.Loader.Status,
-                ("START",  "CUTTING") => MachineProtocol.Cutting.Start,
-                ("STOP",   "CUTTING") => MachineProtocol.Cutting.Stop,
-                ("RESET",  "CUTTING") => MachineProtocol.Cutting.Reset,
-                ("STATUS", "CUTTING") => MachineProtocol.Cutting.Status,
-                ("START",  "LASER")   => MachineProtocol.Laser.Start,
-                ("STOP",   "LASER")   => MachineProtocol.Laser.Stop,
-                ("RESET",  "LASER")   => MachineProtocol.Laser.Reset,
-                ("STATUS", "LASER")   => MachineProtocol.Laser.Status,
-                ("START",  "ROBOT")   => MachineProtocol.Robot.Start,
-                ("STOP",   "ROBOT")   => MachineProtocol.Robot.Stop,
-                ("RESET",  "ROBOT")   => MachineProtocol.Robot.Reset,
-                ("STATUS", "ROBOT")   => MachineProtocol.Robot.Status,
-                ("START",  "BENDING") => MachineProtocol.Bending.Start,
-                ("STOP",   "BENDING") => MachineProtocol.Bending.Stop,
-                ("RESET",  "BENDING") => MachineProtocol.Bending.Reset,
-                ("STATUS", "BENDING") => MachineProtocol.Bending.Status,
-                ("START",  "BENDING2") => MachineProtocol.Bending2.Start,
-                ("STOP",   "BENDING2") => MachineProtocol.Bending2.Stop,
-                ("RESET",  "BENDING2") => MachineProtocol.Bending2.Reset,
-                ("STATUS", "BENDING2") => MachineProtocol.Bending2.Status,
-                _ => null
-            };
+            var adapter = _protocolAdapters.TryGetValue(cmd.Target, out var found) ? found : null;
+            var protocol = adapter?.ResolveCommand(cmd.Type);
 
             if (protocol == null) return;
 
@@ -550,13 +535,28 @@ namespace PipeBendingDashboard.Communication
                 // ── 상태 즉시 갱신 ───────────────────────────────────
                 status.LastMessage = ack;
                 bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                if      (cmdType == "START" && isOk)  status.Status = "WORKING";
-                else if (cmdType == "STOP"  && isOk)  status.Status = "READY";
-                else if (cmdType == "RESET" && isOk) { status.Status = "READY"; status.HasAlarm = false; status.ErrorCode = ""; }
+                if (cmdType == "START" && isOk)
+                {
+                    status.Status = "WORKING";
+                    status.StateCode = "BUSY";
+                }
+                else if (cmdType == "STOP" && isOk)
+                {
+                    status.Status = "READY";
+                    status.StateCode = "READY";
+                }
+                else if (cmdType == "RESET" && isOk)
+                {
+                    status.Status = "READY";
+                    status.StateCode = "READY";
+                    status.HasAlarm = false;
+                    status.ErrorCode = "";
+                }
                 if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
                 {
                     status.HasAlarm = true;
-                    status.Status = "ALARM";
+                    status.Status = "FAULT";
+                    status.StateCode = "FAULT";
                 }
 
                 // ── HTML에 ACK 결과 전달 → 다음 명령 허용 ──────────
@@ -575,7 +575,8 @@ namespace PipeBendingDashboard.Communication
             var status = GetStatus(machineId);
             if (status == null) return;
             status.IsConnected = isConnected;
-            status.Status      = isConnected ? "READY" : "ALARM";
+            status.Status      = isConnected ? "READY" : "FAULT";
+            status.StateCode   = isConnected ? "READY" : "FAULT";
             if (!isConnected)
             {
                 status.IsReady = false;
@@ -677,7 +678,9 @@ namespace PipeBendingDashboard.Communication
 
         private async Task RefreshReadyStateAsync(TcpMachineClient client, MachineStatus status, string statusResponse)
         {
-            var parsed = MachineProtocol.ParseStatusResponse(statusResponse);
+            var parsed = _protocolAdapters.TryGetValue(status.MachineId, out var adapter)
+                ? adapter.ParseStatus(statusResponse)
+                : MachineProtocol.ParseStatusResponse(statusResponse);
             if (parsed.IsReady == true)
             {
                 status.IsReady = true;
@@ -703,14 +706,15 @@ namespace PipeBendingDashboard.Communication
 
             if (parsed.Status == "ALARM")
             {
-                status.Status = "ALARM";
+                status.Status = "FAULT";
+                status.StateCode = "FAULT";
                 status.HasAlarm = true;
                 status.IsReady = false;
                 if (!string.IsNullOrWhiteSpace(parsed.ErrorCode)) status.ErrorCode = parsed.ErrorCode;
                 return;
             }
 
-            if (previous == "ALARM")
+            if (previous == "FAULT")
             {
                 status.IsReady = false;
                 return;
@@ -719,6 +723,7 @@ namespace PipeBendingDashboard.Communication
             if (parsed.IsUnloadComplete)
             {
                 status.Status = "READY";
+                status.StateCode = "READY";
                 status.IsReady = true;
                 status.HasAlarm = false;
                 status.ErrorCode = "";
@@ -728,6 +733,7 @@ namespace PipeBendingDashboard.Communication
             if (parsed.Status == "WORKING")
             {
                 status.Status = "WORKING";
+                status.StateCode = "BUSY";
                 status.HasAlarm = false;
                 status.ErrorCode = "";
                 status.IsReady = false;
@@ -737,6 +743,7 @@ namespace PipeBendingDashboard.Communication
             if (parsed.Status == "FINISH")
             {
                 status.Status = "FINISH";
+                status.StateCode = "DONE";
                 status.IsReady = false;
                 return;
             }
@@ -745,11 +752,13 @@ namespace PipeBendingDashboard.Communication
             if (previous == "FINISH" && parsed.Status == "READY")
             {
                 status.Status = "FINISH";
+                status.StateCode = "DONE";
                 status.IsReady = false;
                 return;
             }
 
             status.Status = "READY";
+            status.StateCode = "READY";
             if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
         }
 
@@ -757,7 +766,7 @@ namespace PipeBendingDashboard.Communication
         {
             if (cmdType != "START") return null;
 
-            bool Ready(string id) => GetStatus(id)?.IsReady == true && _activeMachineIds.Contains(id);
+            bool Ready(string id) => _activeMachineIds.Contains(id) && (GetStatus(id)?.StateCode == "READY");
             return targetId switch
             {
                 "CUTTING" when !Ready("LOADER") => "ERROR:UPSTREAM_NOT_READY",

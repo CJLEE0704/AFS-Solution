@@ -330,6 +330,21 @@ namespace PipeBendingDashboard
                     await HandleSavePipeMachineAsync(cmd.Data);
                     return;
                 }
+                if (cmd.Type.ToUpper() == "SAVE_PIPE_STAGE" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleSavePipeStageAsync(cmd.Data);
+                    return;
+                }
+                if (cmd.Type.ToUpper() == "SAVE_ALARM_HISTORY" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleSaveAlarmHistoryAsync(cmd.Data);
+                    return;
+                }
+                if (cmd.Type.ToUpper() == "SAVE_AUDIT_LOG" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleSaveAuditLogAsync(cmd.Data);
+                    return;
+                }
 
                 // ── 프로젝트 + 배관 일괄 저장 요청 ─────────────────────
                 if (cmd.Type.ToUpper() == "SAVE_PROJECT_PIPES" && !string.IsNullOrEmpty(cmd.Data))
@@ -342,6 +357,16 @@ namespace PipeBendingDashboard
                 if (cmd.Type.ToUpper() == "SAVE_PRODUCTION" && !string.IsNullOrEmpty(cmd.Data))
                 {
                     await HandleSaveProductionAsync(cmd.Data);
+                    return;
+                }
+                if (cmd.Type.ToUpper() == "REQUEST_HISTORY" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleRequestHistoryAsync(cmd.Data);
+                    return;
+                }
+                if (cmd.Type.ToUpper() == "AUTH_LOGIN" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleAuthLoginAsync(cmd.Data);
                     return;
                 }
 
@@ -410,6 +435,64 @@ namespace PipeBendingDashboard
             }
         }
 
+        private async Task HandleSavePipeStageAsync(string dataJson)
+        {
+            if (_db == null || !_db.IsAvailable) return;
+            try
+            {
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                await _db.SavePipeStageHistoryAsync(
+                    d.GetProperty("pipeId").GetString() ?? "",
+                    d.GetProperty("projectId").GetString() ?? "",
+                    d.GetProperty("stageId").GetString() ?? "",
+                    d.TryGetProperty("startedAt", out var st) && DateTime.TryParse(st.GetString(), out var started) ? started : DateTime.Now,
+                    d.TryGetProperty("endedAt", out var et) && DateTime.TryParse(et.GetString(), out var ended) ? ended : null,
+                    d.TryGetProperty("result", out var rs) ? rs.GetString() ?? "IN_PROGRESS" : "IN_PROGRESS",
+                    d.TryGetProperty("holdReasonCode", out var hr) ? hr.GetString() : null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] stage 이력 저장 오류: {ex.Message}");
+            }
+        }
+
+        private async Task HandleSaveAlarmHistoryAsync(string dataJson)
+        {
+            if (_db == null || !_db.IsAvailable) return;
+            try
+            {
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                await _db.SaveAlarmHistoryAsync(
+                    d.GetProperty("machineId").GetString() ?? "",
+                    d.TryGetProperty("errorCode", out var ec) ? ec.GetString() ?? "UNKNOWN" : "UNKNOWN",
+                    d.TryGetProperty("message", out var ms) ? ms.GetString() : null,
+                    d.TryGetProperty("startedAt", out var st) && DateTime.TryParse(st.GetString(), out var started) ? started : DateTime.Now,
+                    d.TryGetProperty("clearedAt", out var ct) && DateTime.TryParse(ct.GetString(), out var cleared) ? cleared : null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] alarm 이력 저장 오류: {ex.Message}");
+            }
+        }
+
+        private async Task HandleSaveAuditLogAsync(string dataJson)
+        {
+            if (_db == null || !_db.IsAvailable) return;
+            try
+            {
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                await _db.SaveAuditLogAsync(
+                    d.TryGetProperty("userId", out var uid) ? uid.GetString() : null,
+                    d.TryGetProperty("action", out var act) ? act.GetString() ?? "UNKNOWN" : "UNKNOWN",
+                    d.TryGetProperty("target", out var tar) ? tar.GetString() : null,
+                    d.TryGetProperty("payload", out var pl) ? pl.GetRawText() : null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] audit 저장 오류: {ex.Message}");
+            }
+        }
+
         // ── 프로젝트 + 배관 일괄 DB 저장 ────────────────────────
         private async Task HandleSaveProjectPipesAsync(string dataJson)
         {
@@ -436,9 +519,11 @@ namespace PipeBendingDashboard
                         string pipeId  = p.GetProperty("pipeId").GetString()  ?? "";
                         string mat     = p.TryGetProperty("material", out var m) ? m.GetString() ?? "SS400" : "SS400";
                         int    size    = p.TryGetProperty("size",     out var s) ? s.GetInt32() : 32;
+                        int? totalLength = p.TryGetProperty("totalLength", out var tl) && tl.ValueKind != JsonValueKind.Null ? tl.GetInt32() : null;
+                        string? pipeName = p.TryGetProperty("pipeName", out var pn) ? pn.GetString() : null;
                         string status  = p.TryGetProperty("status",   out var st)? st.GetString() ?? "미완료" : "미완료";
 
-                        bool isNew = await _db.SavePipeAsync(pipeId, projectId, projectName, mat, size, status);
+                        bool isNew = await _db.SavePipeAsync(pipeId, projectId, projectName, mat, size, status, totalLength, pipeName);
                         if (isNew) savedPipes++;
                         else       skippedPipes++;
                     }
@@ -513,6 +598,50 @@ namespace PipeBendingDashboard
                     data = new { message = ex.Message }
                 });
                 Dispatcher.Invoke(() => SendToWebView(errJson));
+            }
+        }
+
+        private async Task HandleRequestHistoryAsync(string dataJson)
+        {
+            if (_db == null || !_db.IsAvailable) return;
+            try
+            {
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                DateTime? from = d.TryGetProperty("from", out var fv) && DateTime.TryParse(fv.GetString(), out var fd) ? fd : null;
+                DateTime? to = d.TryGetProperty("to", out var tv) && DateTime.TryParse(tv.GetString(), out var td) ? td : null;
+                string? projectId = d.TryGetProperty("projectId", out var pv) ? pv.GetString() : null;
+                string? status = d.TryGetProperty("status", out var sv) ? sv.GetString() : null;
+                var rows = await _db.QueryHistoryAsync(from, to, projectId, status);
+                var json = JsonSerializer.Serialize(new { type = "historyData", data = rows });
+                Dispatcher.Invoke(() => SendToWebView(json));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] history 조회 오류: {ex.Message}");
+            }
+        }
+
+        private async Task HandleAuthLoginAsync(string dataJson)
+        {
+            if (_db == null || !_db.IsAvailable) return;
+            try
+            {
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                var userId = d.GetProperty("id").GetString() ?? "";
+                var pw = d.GetProperty("pw").GetString() ?? "";
+                var result = await _db.AuthenticateAsync(userId, pw);
+                var json = JsonSerializer.Serialize(new
+                {
+                    type = "authResult",
+                    data = new { ok = result.ok, role = result.role, userName = result.userName, userId }
+                });
+                Dispatcher.Invoke(() => SendToWebView(json));
+                if (result.ok)
+                    await _db.SaveAuditLogAsync(userId, "LOGIN_SUCCESS", "AUTH", "{}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] auth 오류: {ex.Message}");
             }
         }
 

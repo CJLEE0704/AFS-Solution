@@ -72,6 +72,7 @@ namespace PipeBendingDashboard.Database
         [Key][Column("pipe_id")]      public string  PipeId      { get; set; } = "";
         [Column("project_id")]        public string  ProjectId   { get; set; } = "";
         [Column("proj_name")]         public string  ProjName    { get; set; } = "";
+        [Column("pipe_name")]         public string? PipeName    { get; set; }
         [Column("material")]          public string  Material    { get; set; } = "SS400";
         [Column("size")]              public int     Size        { get; set; } = 32;
         [Column("total_length")]      public int?    TotalLength { get; set; }
@@ -91,6 +92,7 @@ namespace PipeBendingDashboard.Database
         [Key][Column("record_id")]    public long    RecordId    { get; set; }
         [Column("pipe_id")]           public string  PipeId      { get; set; } = "";
         [Column("project_id")]        public string  ProjectId   { get; set; } = "";
+        [Column("machine_id")]        public string? MachineId   { get; set; }
         [Column("station_id")]        public string? StationId   { get; set; }
         [Column("operator_id")]       public string? OperatorId  { get; set; }
         [Column("config_id")]         public string  ConfigId    { get; set; } = "";
@@ -100,6 +102,43 @@ namespace PipeBendingDashboard.Database
         [Column("oee_snapshot")]      public decimal? OeeSnapshot { get; set; }
         [Column("completed_at")]      public DateTime CompletedAt { get; set; }
         [Column("created_at")]        public DateTime CreatedAt   { get; set; } = DateTime.Now;
+    }
+
+    [Table("pipe_stage_history")]
+    public class PipeStageHistoryEntity
+    {
+        [Key][Column("history_id")]       public long HistoryId       { get; set; }
+        [Column("pipe_id")]               public string PipeId         { get; set; } = "";
+        [Column("project_id")]            public string ProjectId      { get; set; } = "";
+        [Column("stage_id")]              public string StageId        { get; set; } = "";
+        [Column("started_at")]            public DateTime StartedAt    { get; set; }
+        [Column("ended_at")]              public DateTime? EndedAt     { get; set; }
+        [Column("result")]                public string Result          { get; set; } = "IN_PROGRESS";
+        [Column("hold_reason_code")]      public string? HoldReasonCode { get; set; }
+        [Column("created_at")]            public DateTime CreatedAt     { get; set; } = DateTime.Now;
+    }
+
+    [Table("alarm_history")]
+    public class AlarmHistoryEntity
+    {
+        [Key][Column("alarm_id")]         public long AlarmId          { get; set; }
+        [Column("machine_id")]            public string MachineId      { get; set; } = "";
+        [Column("error_code")]            public string ErrorCode      { get; set; } = "";
+        [Column("message")]               public string? Message       { get; set; }
+        [Column("started_at")]            public DateTime StartedAt    { get; set; }
+        [Column("cleared_at")]            public DateTime? ClearedAt   { get; set; }
+        [Column("created_at")]            public DateTime CreatedAt    { get; set; } = DateTime.Now;
+    }
+
+    [Table("audit_log")]
+    public class AuditLogEntity
+    {
+        [Key][Column("audit_id")]         public long AuditId          { get; set; }
+        [Column("user_id")]               public string? UserId        { get; set; }
+        [Column("action")]                public string Action         { get; set; } = "";
+        [Column("target")]                public string? Target        { get; set; }
+        [Column("payload")]               public string? Payload       { get; set; }
+        [Column("created_at")]            public DateTime CreatedAt    { get; set; } = DateTime.Now;
     }
 
     // ── pipe_machine_log — 배관별 머신 처리 이력 ─────────────

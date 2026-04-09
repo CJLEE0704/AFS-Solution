@@ -1586,13 +1586,13 @@ const WORKER_MENUS=[
 const menuItems = ADMIN_MENUS; // placeholder, initNav uses role-based list
 
 // ── SHARED PIPE DATA (Dashboard + Operation 동일하게 사용) ──
-const STATUS_LIST=['완료','완료','완료','미완료','미완료','불량'];
+const STATUS_LIST=['대기','대기','대기','대기','대기','대기'];
 const PIPE_DATA = Array(30).fill(null).map((_,i)=>({
   id:`PIPE-2024-${1500+i}`,
   status: STATUS_LIST[i%6],
   material:['SS400','SUS304','SCH40'][i%3],
   size:[25,32,40,50][i%4],
-  prog: STATUS_LIST[i%6]==='완료'?100:Math.floor(Math.random()*85)+5,
+  prog: 0,
   delay: i%7===0?Math.floor(Math.random()*20)+5:0,
 }));
 
@@ -2218,8 +2218,8 @@ function render3D(viewerId, titleId, subId, badgeId, pipe){
   const t=document.getElementById(titleId),s=document.getElementById(subId),b=document.getElementById(badgeId);
   if(t) t.textContent=`${pipe.id} — ${sh.name}`;
   if(s) s.textContent=`Ø${pipe.size}A · ${pipe.material} · ${sh.name}`;
-  const stMap={완료:'완료',미완료:'작업중',불량:'불량',Completed:'완료',Bending:'작업중',Queue:'대기'};
-  const clsMap={완료:'완료',미완료:'미완료',불량:'불량',Completed:'완료',Bending:'미완료',Queue:'미완료'};
+  const stMap={완료:'완료',미완료:'작업중',진행중:'작업중',대기:'대기',불량:'불량',Completed:'완료',Bending:'작업중',Queue:'대기'};
+  const clsMap={완료:'완료',미완료:'미완료',진행중:'미완료',대기:'미완료',불량:'불량',Completed:'완료',Bending:'미완료',Queue:'미완료'};
   if(b) b.innerHTML=`<span class="bw bw-${clsMap[pipe.status]||'미완료'}">${stMap[pipe.status]||'작업중'}</span>`;
   const svgId=viewerId+'Svg';
   const container=viewerEl||document.getElementById(viewerId); if(!container) return;
@@ -2491,8 +2491,8 @@ function renderDashProjectStats(){
   if(!wrap) return;
   const projs=projects.length?projects:DEMO_PROJECTS;
   wrap.innerHTML=projs.slice(0,3).map(proj=>{
-    const cnt={완료:0,미완료:0,불량:0};
-    proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1;});
+    const cnt={완료:0,미완료:0,불량:0,대기:0};
+    proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1; if(p.status==='대기'||p.status==='진행중') cnt['미완료']=(cnt['미완료']||0)+1;});
     const total=proj.pipes.length;
     const pct=total>0?Math.round(cnt['완료']/total*100):0;
     const ftCls=proj.fileType==='DEMO'?'ft-demo':proj.fileType==='CSV'?'ft-csv':'ft-json';
@@ -2529,8 +2529,8 @@ function renderDashProjectStats(){
 }
 
 function renderDashFilter(){
-  const cnt={완료:0,미완료:0,불량:0};
-  PIPE_DATA.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1;});
+  const cnt={완료:0,미완료:0,불량:0,대기:0};
+  PIPE_DATA.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1; if(p.status==='대기'||p.status==='진행중') cnt['미완료']=(cnt['미완료']||0)+1;});
   const el=document.getElementById('dashFilterRow'); if(!el) return;
   el.innerHTML=[
     {id:'all',    l:'전체',n:PIPE_DATA.length},
@@ -2545,8 +2545,8 @@ function renderDashList(){
   const fil=dashFilter==='all'?PIPE_DATA:PIPE_DATA.filter(p=>p.status===dashFilter);
   if(!fil.length){ el.innerHTML='<div style="padding:12px;text-align:center;font-size:9px;color:var(--dim)">해당 배관 없음</div>'; return; }
   el.innerHTML=fil.map((p,i)=>{
-    const cls=p.status==='완료'?'ps-c':p.status==='미완료'?'ps-b':'ps-q';
-    const txt=p.status==='완료'?'완료':p.status==='미완료'?'진행중':'불량';
+    const cls=p.status==='완료'?'ps-c':(p.status==='미완료'||p.status==='대기'||p.status==='진행중')?'ps-b':'ps-q';
+    const txt=p.status==='완료'?'완료':(p.status==='대기'?'대기':(p.status==='미완료'||p.status==='진행중')?'진행중':'불량');
     const bc=p.delay>0?'var(--red)':p.prog===100?'var(--green)':'var(--cyan)';
     const sel=dashSel&&dashSel.id===p.id;
     return`<div class="pc${sel?' sel':''}" onclick="selDashPipe('${p.id}')">
@@ -2862,21 +2862,21 @@ function parseJSON(txt,name){try{let d=JSON.parse(txt);if(!Array.isArray(d))d=d.
 function parseCSV(txt,name){const lines=txt.trim().split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return genDemoPipes(name,12);const hdr=lines[0].split(/[,;\t]/).map(h=>h.trim().toLowerCase().replace(/['"]/g,''));return lines.slice(1).map((line,i)=>{const v=line.split(/[,;\t]/).map(x=>x.trim().replace(/^["']|["']$/g,''));const o={};hdr.forEach((h,hi)=>{o[h]=v[hi]||'';});return normPipe(o,i,name);});}
 function parseTXT(txt,name){const lines=txt.trim().split(/\r?\n/).filter(l=>l.trim()&&!l.startsWith('#'));if(!lines.length)return genDemoPipes(name,8);return lines.map((l,i)=>{const p=l.split(/[\t,]+/).map(x=>x.trim());return normPipe({id:p[0],material:p[1],size:p[2],status:p[3]},i,name);});}
 function normPipe(d,i,proj){
-  const SM={완료:'완료',done:'완료',completed:'완료',complete:'완료',미완료:'미완료',wip:'미완료',progress:'미완료',작업중:'미완료',불량:'불량',defect:'불량',fail:'불량',ng:'불량'};
-  const st=SM[String(d.status||d.상태||'').toLowerCase().replace(/\s/g,'')]||STATUS_LIST[i%6];
+  const SM={완료:'완료',done:'완료',completed:'완료',complete:'완료',대기:'대기',wait:'대기',ready:'대기',미완료:'미완료',wip:'미완료',progress:'미완료',작업중:'미완료',진행중:'진행중',불량:'불량',defect:'불량',fail:'불량',ng:'불량'};
+  const st=SM[String(d.status||d.상태||'').toLowerCase().replace(/\s/g,'')]||'대기';
   const pfx=proj.replace(/\s/g,'').substring(0,6).toUpperCase();
   const id=String(d.id||d.pipe_id||d.번호||`${pfx}-${String(i+1).padStart(3,'0')}`);
   const mat=String(d.material||d.재질||d.자재||['SS400','SUS304','SCH40'][i%3]);
   const sz=parseInt(d.size||d.직경||d.dn||0)||[25,32,40,50][i%4];
-  const prog=st==='완료'?100:Math.floor(Math.random()*80)+10;
+  const prog=st==='완료'?100:(st==='대기'?0:Math.floor(Math.random()*80)+10);
   const delay=i%7===0?Math.floor(Math.random()*15)+3:0;
   return{id,status:st,material:mat,size:sz,prog,delay,projName:proj};
 }
 function genDemoPipes(name,n){
   return Array(n).fill(null).map((_,i)=>({
     id:`${name.replace(/\s/g,'').substring(0,6).toUpperCase()}-${String(i+1).padStart(3,'0')}`,
-    status:STATUS_LIST[i%6],material:['SS400','SUS304','SCH40'][i%3],size:[25,32,40,50][i%4],
-    prog:STATUS_LIST[i%6]==='완료'?100:Math.floor(Math.random()*80)+10,delay:i%7===0?5+i:0,projName:name
+    status:'대기',material:['SS400','SUS304','SCH40'][i%3],size:[25,32,40,50][i%4],
+    prog:0,delay:0,projName:name
   }));
 }
 function addProject(name,ext,pipes){
@@ -2901,7 +2901,7 @@ function setActiveProject(id){
   activeProjectId=id;const proj=projects.find(p=>p.id===id);if(!proj)return;
   expandedProjects[id]=true;opSel=null;
   // update stats
-  const cnt={완료:0,미완료:0,불량:0};proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1;});
+  const cnt={완료:0,미완료:0,불량:0,대기:0};proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1; if(p.status==='대기'||p.status==='진행중') cnt['미완료']=(cnt['미완료']||0)+1;});
   ['opSC','opSI','opSD','opST'].forEach((el,i)=>{const v=i===3?proj.pipes.length:[cnt['완료'],cnt['미완료'],cnt['불량']][i];const e=document.getElementById(el);if(e)e.textContent=v;});
   const sub=document.getElementById('opHdrSub');if(sub)sub.textContent=`${proj.name} · ${proj.pipes.length}개 배관`;
   renderProjTree();
@@ -3091,8 +3091,8 @@ function renderProjTree(){
     const isActive=proj.id===activeProjectId;
     const ftCls=proj.fileType==='DEMO'?'ft-demo':proj.fileType==='CSV'?'ft-csv':'ft-json';
     const filtered=opFilter==='all'?proj.pipes:proj.pipes.filter(p=>p.status===opFilter);
-    const cnt={완료:0,미완료:0,불량:0};
-    proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1;});
+    const cnt={완료:0,미완료:0,불량:0,대기:0};
+    proj.pipes.forEach(p=>{cnt[p.status]=(cnt[p.status]||0)+1; if(p.status==='대기'||p.status==='진행중') cnt['미완료']=(cnt['미완료']||0)+1;});
     const total=proj.pipes.length, done=cnt['완료'], remain=cnt['미완료'], bad=cnt['불량'];
     const pct=total>0?Math.round(done/total*100):0;
     // 전체선택 여부
@@ -3167,7 +3167,7 @@ function renderProjTree(){
         <span style="font-size:9px;color:var(--dim)">${filtered.length}개</span>
       </div>`;
       filtered.forEach((p,i)=>{
-        const cls=p.status==='완료'?'ps-c':p.status==='미완료'?'ps-b':'ps-q';
+        const cls=p.status==='완료'?'ps-c':(p.status==='미완료'||p.status==='대기'||p.status==='진행중')?'ps-b':'ps-q';
         const isSel=opSel&&opSel.id===p.id&&opSel.projName===p.projName;
         const isChecked=_checkedPipes.has(proj.id+'::'+p.id);
         const rowBg=p.status==='불량'?'background:rgba(211,116,137,.05);border-left:2px solid rgba(211,116,137,.4)':'';
@@ -4292,7 +4292,7 @@ function renderDhList(projs){
 
   el.innerHTML = projs.map(proj => {
     const cnt = {완료:0,미완료:0,불량:0};
-    proj.pipes.forEach(p=>{ cnt[p.status]=(cnt[p.status]||0)+1; });
+    proj.pipes.forEach(p=>{ cnt[p.status]=(cnt[p.status]||0)+1; if(p.status==='대기'||p.status==='진행중') cnt['미완료']=(cnt['미완료']||0)+1; });
     const total=proj.pipes.length;
     const done=cnt['완료'], remain=cnt['미완료'], bad=cnt['불량'];
     const ftCls = proj.fileType==='DEMO'?'ft-demo':proj.fileType==='CSV'?'ft-csv':'ft-json';
@@ -4349,7 +4349,7 @@ function renderDhList(projs){
     // ④ 펼쳐진 경우: 배관 목록
     if(isOpen){
       proj.pipes.forEach((p,i)=>{
-        const cls=p.status==='완료'?'ps-c':p.status==='미완료'?'ps-b':'ps-q';
+        const cls=p.status==='완료'?'ps-c':(p.status==='미완료'||p.status==='대기'||p.status==='진행중')?'ps-b':'ps-q';
         const isSel=dhSelectedPipe&&dhSelectedPipe.id===p.id&&dhSelectedPipe._projId===proj.id;
         h+=`<div onclick="selDhPipe('${proj.id}','${p.id}')"
           class="pipe-row${isSel?' sel':''}"
@@ -4386,7 +4386,7 @@ function selDhPipe(projId, pipeId){
   const badgeEl = document.getElementById('dhBadge');
   if(titleEl) titleEl.textContent = `${pipeId} — ${sh.name}`;
   if(subEl)   subEl.textContent   = `프로젝트: ${proj.name} · Ø${pipe.size}A · ${pipe.material}`;
-  const clsMap={완료:'완료',미완료:'미완료',불량:'불량'};
+  const clsMap={완료:'완료',미완료:'미완료',진행중:'미완료',대기:'미완료',불량:'불량'};
   if(badgeEl) badgeEl.innerHTML = `<span class="bw bw-${clsMap[pipe.status]||'미완료'}">${pipe.status}</span>`;
 
   // Info cards
@@ -6394,8 +6394,8 @@ function renderWorkerPipeList(){
   const fil=workerFilter==='all'?PIPE_DATA:PIPE_DATA.filter(p=>p.status===workerFilter);
   el.innerHTML='';
   fil.forEach((p,i)=>{
-    const cls=p.status==='완료'?'ps-c':p.status==='미완료'?'ps-b':'ps-q';
-    const txt=p.status==='완료'?'완료':p.status==='미완료'?'작업':p.status;
+    const cls=p.status==='완료'?'ps-c':(p.status==='미완료'||p.status==='대기'||p.status==='진행중')?'ps-b':'ps-q';
+    const txt=p.status==='완료'?'완료':(p.status==='대기'?'대기':(p.status==='미완료'||p.status==='진행중')?'작업':p.status);
     const isSel=workerSel&&workerSel.id===p.id;
 
     const div=document.createElement('div');
@@ -6951,6 +6951,15 @@ window.sendToCSharp = function(type, target, data){
   } catch(e){ console.error('[sendToCSharp]', e); }
 };
 </script>
+<script src="./js/project-store.js"></script>
+<script src="./js/comm-bridge.js"></script>
+<script src="./js/dashboard-ui.js"></script>
+<script src="./js/operation-ui.js"></script>
+<script src="./js/worker-ui.js"></script>
+<script src="./js/settings-users.js"></script>
+<script src="./js/pipeline-engine.js"></script>
+<script src="./js/history-db.js"></script>
+<script src="./js/file-io.js"></script>
 
 <!-- ── 파일 추가 전용 input (실제 DOM — printReport 문자열과 별개) ── -->
 <input type="file" id="addFileInput" accept=".csv,.json,.txt" multiple style="display:none"

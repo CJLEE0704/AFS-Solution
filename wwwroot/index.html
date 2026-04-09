@@ -3759,6 +3759,18 @@ let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
 let demoActiveStep = null;
 let demoBendFlip = false;
 
+// 외부 모듈(pipeline-engine)에서 충돌 없이 접근할 수 있도록 라인 상태 브리지 제공
+window.__lineState = {
+  get stageSlots(){ return stageSlots; },
+  set stageSlots(v){ stageSlots = v; },
+  get nextPipeFeedIdx(){ return nextPipeFeedIdx; },
+  set nextPipeFeedIdx(v){ nextPipeFeedIdx = v; },
+  get loaderBufferCount(){ return loaderBufferCount; },
+  set loaderBufferCount(v){ loaderBufferCount = v; },
+  get processRunning(){ return processRunning; },
+  get simModeOn(){ return simModeOn; },
+};
+
 // 머신 번호 → ID 매핑
 const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
 

@@ -8,6 +8,7 @@
     <RootNamespace>PipeBendingDashboard</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <!-- 단일 exe 배포 -->
@@ -24,6 +25,20 @@
   </ItemGroup>
 
   <!-- wwwroot 폴더 내 파일을 빌드 출력에 복사 -->
+  <ItemGroup>
+    <Compile Include="App.xaml.cs" />
+    <Compile Include="MainWindow.xaml.cs" />
+    <Compile Include="Communication\CommunicationManager.cs" />
+    <Compile Include="Communication\MachineProtocol.cs" />
+    <Compile Include="Communication\MachineProtocolAdapter.cs" />
+    <Compile Include="Communication\MachineStatus.cs" />
+    <Compile Include="Communication\TcpMachineClient.cs" />
+    <Compile Include="Database\AppDbContext.cs" />
+    <Compile Include="Database\DbMigrator.cs" />
+    <Compile Include="Database\DbModels.cs" />
+    <Compile Include="Database\DbService.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="wwwroot\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

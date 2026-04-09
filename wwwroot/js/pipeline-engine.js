@@ -21,8 +21,9 @@
   function nextPipeFromActiveProject(){
     const pid=ProjectStore.state.activeProjectId || global.activeProjectId;
     if(!pid) return null;
-    const pipeId=ProjectStore.shiftPipe(pid);
-    if(!pipeId) return null;
+    const q=ProjectStore.ensureQueue(pid);
+    if(!q.length) return null;
+    const pipeId=q[0];
     return ProjectStore.findPipe(pipeId)?.pipe || null;
   }
 
@@ -35,17 +36,20 @@
   function bind(){
     const origRun=global.runPipelineTick;
     global.runPipelineTick=function(){
+      // 기존 라인 스케줄러를 우선 사용해 연속 생산성을 유지
+      const ret=origRun?.apply(this,arguments);
+      // 보조 동기화: 선택된 프로젝트가 있으면 현재 선택 배관만 맞춘다(큐 소진 X)
       const p=nextPipeFromActiveProject();
-      if(p){
+      if(p && !global.processRunning){
         global.opSel=p;
-        syncPipeSelection(p);
       }
-      return origRun?.apply(this,arguments);
+      return ret;
     };
 
     const origUpdate=global.updateViewersForPipe;
     global.updateViewersForPipe=function(idx){
-      const pipe=global.opSel || (global.PIPE_DATA?.[idx]);
+      // idx 기반으로 뷰어를 갱신해야 다수 배관 연속 표시가 유지된다.
+      const pipe=(global.PIPE_DATA?.[idx % (global.PIPE_DATA?.length||1)]) || global.opSel;
       if(pipe) syncPipeSelection(pipe);
       return origUpdate?.apply(this,arguments);
     };

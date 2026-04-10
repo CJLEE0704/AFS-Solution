@@ -89,6 +89,8 @@ namespace PipeBendingDashboard
 
     // ── DB 서비스 ────────────────────────────────────────────
     private DbService? _db;
+    private string _currentAuthUserId = "";
+    private string _currentAuthRole = "";
     // ※ 실제 환경에 맞게 수정: Server=IP주소;Port=3306;Database=pbd_production;User=root;Password=iaan;
     private const string DB_CONN = "Server=127.0.0.1;Port=3306;Database=pbd_production;User=root;Password=iaan;CharSet=utf8mb4;";
 
@@ -317,6 +319,18 @@ namespace PipeBendingDashboard
                     return;
                 }
 
+                if (cmd.Type.ToUpper() == "SIM_MODE" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    try
+                    {
+                        var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
+                        var on = d.TryGetProperty("on", out var ov) && ov.GetBoolean();
+                        _commMgr.SetSimulationMode(on);
+                    }
+                    catch { _commMgr.SetSimulationMode(false); }
+                    return;
+                }
+
                 // ── 리포트 데이터 요청 (DB 집계) ─────────────────────
                 if (cmd.Type.ToUpper() == "REQUEST_REPORT_DATA" && !string.IsNullOrEmpty(cmd.Data))
                 {
@@ -367,6 +381,39 @@ namespace PipeBendingDashboard
                 if (cmd.Type.ToUpper() == "AUTH_LOGIN" && !string.IsNullOrEmpty(cmd.Data))
                 {
                     await HandleAuthLoginAsync(cmd.Data);
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "REQUEST_USERS")
+                {
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedResponseAsync("REQUEST_USERS");
+                        return;
+                    }
+                    await HandleRequestUsersFromDbAsync();
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "UPSERT_USER" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedResponseAsync("UPSERT_USER");
+                        return;
+                    }
+                    await HandleUpsertUserToDbAsync(cmd.Data);
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "DELETE_USER" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedResponseAsync("DELETE_USER");
+                        return;
+                    }
+                    await HandleDeactivateUserInDbAsync(cmd.Data);
                     return;
                 }
 
@@ -623,17 +670,45 @@ namespace PipeBendingDashboard
 
         private async Task HandleAuthLoginAsync(string dataJson)
         {
-            if (_db == null || !_db.IsAvailable) return;
+            string userId = "";
+            string reqId = "";
             try
             {
                 var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
-                var userId = d.GetProperty("id").GetString() ?? "";
+                userId = d.GetProperty("id").GetString() ?? "";
                 var pw = d.GetProperty("pw").GetString() ?? "";
+                reqId = d.TryGetProperty("reqId", out var rq) ? rq.GetString() ?? "" : "";
+
+                if (_db == null || !_db.IsAvailable)
+                {
+                    _currentAuthUserId = "";
+                    _currentAuthRole = "";
+                    var failNoDb = JsonSerializer.Serialize(new
+                    {
+                        type = "authResult",
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "DB_UNAVAILABLE" }
+                    });
+                    Dispatcher.Invoke(() => SendToWebView(failNoDb));
+                    return;
+                }
+
                 var result = await _db.AuthenticateAsync(userId, pw);
+                _currentAuthUserId = result.ok ? userId : "";
+                _currentAuthRole = result.ok
+                    ? (string.Equals(result.role, "admin", StringComparison.OrdinalIgnoreCase) ? "admin" : "worker")
+                    : "";
                 var json = JsonSerializer.Serialize(new
                 {
                     type = "authResult",
-                    data = new { ok = result.ok, role = result.role, userName = result.userName, userId }
+                    data = new
+                    {
+                        ok = result.ok,
+                        role = result.role,
+                        userName = result.userName,
+                        userId,
+                        reqId,
+                        message = result.ok ? "OK" : "INVALID_CREDENTIALS"
+                    }
                 });
                 Dispatcher.Invoke(() => SendToWebView(json));
                 if (result.ok)
@@ -642,7 +717,151 @@ namespace PipeBendingDashboard
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[DB] auth 오류: {ex.Message}");
+                _currentAuthUserId = "";
+                _currentAuthRole = "";
+                try
+                {
+                    var failJson = JsonSerializer.Serialize(new
+                    {
+                        type = "authResult",
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "AUTH_EXCEPTION" }
+                    });
+                    Dispatcher.Invoke(() => SendToWebView(failJson));
+                }
+                catch { }
             }
+        }
+
+        private async Task HandleRequestUsersFromDbAsync()
+        {
+            if (_db == null || !_db.IsAvailable)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "usersData",
+                    data = Array.Empty<object>()
+                })));
+                return;
+            }
+            var users = await _db.GetUsersAsync();
+            Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+            {
+                type = "usersData",
+                data = users
+            })));
+        }
+
+        private async Task HandleUpsertUserToDbAsync(string dataJson)
+        {
+            try
+            {
+                if (_db == null || !_db.IsAvailable)
+                {
+                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                    {
+                        type = "userSaved",
+                        data = new { ok = false, message = "DB_UNAVAILABLE" }
+                    })));
+                    return;
+                }
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                var userId = d.GetProperty("id").GetString() ?? "";
+                var userName = d.TryGetProperty("name", out var nv) ? nv.GetString() ?? userId : userId;
+                var pw = d.TryGetProperty("pw", out var pv) ? pv.GetString() ?? "" : "";
+                var role = d.TryGetProperty("role", out var rv) ? rv.GetString() ?? "worker" : "worker";
+                var res = await _db.UpsertUserAsync(userId, userName, pw, role);
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userSaved",
+                    data = new { ok = res.ok, message = res.message, id = userId }
+                })));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userSaved",
+                    data = new { ok = false, message = ex.Message }
+                })));
+            }
+        }
+
+        private async Task HandleDeactivateUserInDbAsync(string dataJson)
+        {
+            try
+            {
+                if (_db == null || !_db.IsAvailable)
+                {
+                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                    {
+                        type = "userDeleted",
+                        data = new { ok = false, message = "DB_UNAVAILABLE" }
+                    })));
+                    return;
+                }
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                var userId = d.GetProperty("id").GetString() ?? "";
+                var res = await _db.DeactivateUserAsync(userId);
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userDeleted",
+                    data = new { ok = res.ok, message = res.message, id = userId }
+                })));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userDeleted",
+                    data = new { ok = false, message = ex.Message }
+                })));
+            }
+        }
+
+        private bool IsAuthorizedAdminUserMgmtCommand(WebCommand cmd)
+        {
+            if (cmd == null) return false;
+            if (!string.Equals(cmd.Target, "ADMIN", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.Equals(_currentAuthRole, "admin", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(cmd.Data)) return false;
+                var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
+                var actorRole = d.TryGetProperty("actorRole", out var rv) ? (rv.GetString() ?? "").Trim() : "";
+                return string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private Task SendUserMgmtDeniedResponseAsync(string action)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (string.Equals(action, "REQUEST_USERS", StringComparison.OrdinalIgnoreCase))
+                {
+                    SendToWebView(JsonSerializer.Serialize(new
+                    {
+                        type = "usersData",
+                        data = Array.Empty<object>(),
+                        error = $"{action}:FORBIDDEN_ADMIN_ONLY"
+                    }));
+                    return;
+                }
+
+                var type = string.Equals(action, "DELETE_USER", StringComparison.OrdinalIgnoreCase)
+                    ? "userDeleted"
+                    : "userSaved";
+
+                SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type,
+                    data = new { ok = false, message = $"{action}:FORBIDDEN_ADMIN_ONLY" }
+                }));
+            });
+            return Task.CompletedTask;
         }
 
         // ── 활성 머신 목록 변경 처리 ─────────────────────────────

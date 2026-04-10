@@ -1713,32 +1713,15 @@ function setRole(role){
   if(role==='admin'){
     ab.style.cssText+=';border-color:var(--cyan);background:var(--cg);color:var(--cyan)';
     wb.style.cssText+=';border-color:var(--border);background:transparent;color:var(--dim)';
-    document.getElementById('loginId').value='admin';
   } else {
     wb.style.cssText+=';border-color:#6FB58A;background:rgba(111,181,138,.15);color:#6FB58A';
     ab.style.cssText+=';border-color:var(--border);background:transparent;color:var(--dim)';
-    document.getElementById('loginId').value='worker';
   }
   document.getElementById('loginPw').value='';
   document.getElementById('loginPw').focus();
 }
-const ACCOUNTS={admin:{id:'admin',pw:'admin'},worker:{id:'worker',pw:'worker'}};
 let _loginPending=null; // { id, pw, reqId, timer }
 let _loginReqSeq=0;
-
-function _findLocalAccount(id,pw){
-  const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
-  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
-  if(!found){
-    const legacy = [
-      {id:'admin', pw:'admin', role:'admin'},
-      {id:'iaan',  pw:'iaan',  role:'admin'},
-      {id:'worker',pw:'worker',role:'worker'}
-    ];
-    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
-  }
-  return found;
-}
 
 function _finalizeLoginSuccess(role,userId){
   userRole=role;
@@ -1797,7 +1780,7 @@ function doLogin(){
     return;
   }
 
-  // DB 우선 인증 (WebView2 환경), 실패/타임아웃 시 로컬 fallback
+  // DB 전용 인증 (WebView2 환경)
   if(window.chrome?.webview){
     const reqId = (++_loginReqSeq);
     if(_loginPending?.timer) clearTimeout(_loginPending.timer);
@@ -1805,18 +1788,14 @@ function doLogin(){
     window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
     _loginPending.timer = setTimeout(()=>{
       if(!_loginPending || _loginPending.reqId!==reqId) return;
-      const local=_findLocalAccount(id,pw);
-      if(local) _finalizeLoginSuccess(local.role, local.id);
-      else _finalizeLoginFail();
+      _finalizeLoginFail();
       _loginPending=null;
     }, 2500);
     return;
   }
 
-  // 브라우저 단독 실행: 로컬 인증
-  const local=_findLocalAccount(id,pw);
-  if(local) _finalizeLoginSuccess(local.role, local.id);
-  else _finalizeLoginFail();
+  // 브라우저 단독 실행: DB 경로 없음 → 실패 처리
+  _finalizeLoginFail();
 }
 
 function afterLogin(){
@@ -6207,11 +6186,12 @@ function initSettingsPage(){
   const settGrid = document.getElementById('settGrid');
 
   if(userRole==='admin'){
-    // Admin: 계정 관리 전체 너비, 장비 구성 숨김
-    if(sub) sub.textContent='작업자 · 관리자 계정 관리';
-    if(cfgSection){ cfgSection.style.display='none'; }
-    if(userSection){ userSection.style.display='flex'; userSection.style.flex='1'; }
-    renderUserList();
+    // DB 기반 인증 전용: 앱 내부 계정 관리는 비활성
+    if(sub) sub.textContent='장비 구성 선택 · 선택한 장비만 Operation에서 가동';
+    if(userSection){ userSection.style.display='none'; }
+    if(cfgSection){ cfgSection.style.display='flex'; }
+    loadSelectedConfig();
+    renderCfgCards();
   } else {
     // Worker: 장비 구성 전체 너비, 계정 관리 숨김
     if(sub) sub.textContent='장비 구성 선택 · 선택한 장비만 Operation에서 가동';
@@ -6223,169 +6203,17 @@ function initSettingsPage(){
   }
 }
 
-// ── 계정 관리 ──
-// 기본 계정 (변경 불가)
-const DEFAULT_ACCOUNTS=[
-  {id:'admin', name:'관리자',  pw:'admin',  role:'admin',  fixed:true},
-  {id:'iaan',  name:'관리자(legacy)',  pw:'iaan',  role:'admin',  fixed:true},
-  {id:'worker',name:'작업자',  pw:'worker', role:'worker', fixed:true},
-];
-let userEditIdx = null; // null=신규, number=수정 인덱스
-
-function loadUsers(){
-  try{
-    const s=localStorage.getItem('bpd_users');
-    if(s) return [...DEFAULT_ACCOUNTS,...JSON.parse(s)];
-  }catch(e){}
-  return [...DEFAULT_ACCOUNTS];
-}
-function saveUsers(users){
-  const custom=users.filter(u=>!u.fixed);
-  try{localStorage.setItem('bpd_users',JSON.stringify(custom));}catch(e){}
-  // ACCOUNTS 동기화
-  users.forEach(u=>{ ACCOUNTS[u.role+'_'+u.id]={id:u.id,pw:u.pw}; });
-  // 기본 계정은 항상 유지
-  ACCOUNTS.admin={id:'admin',pw:'admin'};
-  ACCOUNTS.admin_iaan={id:'iaan',pw:'iaan'};
-  ACCOUNTS.worker={id:'worker',pw:'worker'};
-}
-
+// ── 계정 관리 (DB 전용 인증으로 전환되어 비활성) ──
 function renderUserList(){
-  const el=document.getElementById('userList'); if(!el) return;
-  const users=loadUsers();
-  const fixed=users.filter(u=>u.fixed);
-  const custom=users.filter(u=>!u.fixed);
-
-  const roleCol=r=>r==='admin'?'#6FB6C9':'#6FB58A';
-  const roleIcon=r=>r==='admin'?'👔':'🔧';
-  const roleTxt=r=>r==='admin'?'관리자':'작업자';
-
-  const fixedHtml=fixed.map(u=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
-                border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
-      <div style="width:28px;height:28px;border-radius:50%;background:${roleCol(u.role)}22;
-                  border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
-        ${roleIcon(u.role)}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name}</div>
-        <div style="font-size:8.5px;color:var(--dim);font-family:monospace">${u.id}
-          <span style="margin-left:5px;padding:1px 6px;border-radius:3px;font-size:7.5px;font-weight:700;
-            background:${roleCol(u.role)}18;color:${roleCol(u.role)};border:1px solid ${roleCol(u.role)}33">${roleTxt(u.role)}</span>
-        </div>
-      </div>
-      <span style="font-size:8px;color:var(--dim);padding:2px 8px;border-radius:3px;
-                   background:var(--panel2);border:1px solid var(--border)">기본계정</span>
-    </div>`).join('');
-
-  // 구분선 + 사용자 목록 헤더
-  const sepHtml=`
-    <div style="margin:12px 0 8px;display:flex;align-items:center;gap:8px">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="font-size:8px;font-weight:700;color:var(--dim);letter-spacing:1px;text-transform:uppercase;flex-shrink:0">
-        사용자 목록 (${custom.length}명)
-      </span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>`;
-
-  const customHtml = custom.length===0
-    ? `<div style="text-align:center;padding:20px 10px;color:var(--dim);font-size:9px;
-                   border:1px dashed var(--border);border-radius:6px">
-         아직 추가된 사용자가 없습니다<br>
-         <span style="font-size:8px;opacity:.6">상단 [+ 계정 추가] 버튼으로 추가하세요</span>
-       </div>`
-    : custom.map((u,ci)=>{
-        const gi=users.indexOf(u); // 전체 배열 인덱스
-        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
-                            border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
-          <div style="width:26px;height:26px;border-radius:50%;background:${roleCol(u.role)}22;
-                      border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">
-            ${roleIcon(u.role)}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name}</div>
-            <div style="font-size:8px;color:var(--dim);font-family:monospace">${u.id}
-              <span style="margin-left:5px;padding:1px 6px;border-radius:3px;font-size:7px;font-weight:700;
-                background:${roleCol(u.role)}18;color:${roleCol(u.role)};border:1px solid ${roleCol(u.role)}33">${roleTxt(u.role)}</span>
-            </div>
-          </div>
-          <button onclick="editUser(${gi})"
-            style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid var(--border2);
-                   color:var(--text);font-size:8.5px;cursor:pointer;flex-shrink:0">수정</button>
-          <button onclick="deleteUser(${gi})"
-            style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid rgba(199,110,130,.4);
-                   color:var(--red);font-size:8.5px;cursor:pointer;flex-shrink:0">삭제</button>
-        </div>`;
-      }).join('');
-
-  el.innerHTML = fixedHtml + sepHtml + customHtml;
+  const section=document.getElementById('settingsUserSection');
+  if(section) section.style.display='none';
 }
-
-function openAddUser(){
-  userEditIdx=null;
-  document.getElementById('userFormTitle').textContent='새 계정 추가';
-  document.getElementById('uName').value='';
-  document.getElementById('uId').value='';
-  document.getElementById('uPw').value='';
-  document.getElementById('uRole').value='worker';
-  document.getElementById('userFormErr').style.display='none';
-  document.getElementById('userForm').style.display='block';
-  document.getElementById('uName').focus();
-}
-function editUser(idx){
-  const users=loadUsers();
-  const u=users[idx]; if(!u||u.fixed) return;
-  userEditIdx=idx;
-  document.getElementById('userFormTitle').textContent='계정 수정';
-  document.getElementById('uName').value=u.name;
-  document.getElementById('uId').value=u.id;
-  document.getElementById('uPw').value=u.pw;
-  document.getElementById('uRole').value=u.role;
-  document.getElementById('userFormErr').style.display='none';
-  document.getElementById('userForm').style.display='block';
-}
-function cancelUser(){
-  document.getElementById('userForm').style.display='none';
-  userEditIdx=null;
-}
-function togglePwVisible(){
-  const el=document.getElementById('uPw');
-  el.type=el.type==='password'?'text':'password';
-}
-function saveUser(){
-  const name=document.getElementById('uName').value.trim();
-  const id=document.getElementById('uId').value.trim();
-  const pw=document.getElementById('uPw').value.trim();
-  const role=document.getElementById('uRole').value;
-  const errEl=document.getElementById('userFormErr');
-  // 유효성
-  if(!name||!id||!pw){errEl.style.display='block';errEl.textContent='모든 항목을 입력하세요';return;}
-  if(id.length<3){errEl.style.display='block';errEl.textContent='아이디는 3자 이상이어야 합니다';return;}
-  if(pw.length<4){errEl.style.display='block';errEl.textContent='비밀번호는 4자 이상이어야 합니다';return;}
-  let users=loadUsers();
-  // 중복 체크
-  const dupIdx=users.findIndex((u,i)=>u.id===id&&i!==userEditIdx);
-  if(dupIdx>=0){errEl.style.display='block';errEl.textContent='이미 사용 중인 아이디입니다';return;}
-  if(userEditIdx===null){
-    users.push({id,name,pw,role,fixed:false});
-  } else {
-    users[userEditIdx]={...users[userEditIdx],name,id,pw,role};
-  }
-  saveUsers(users);
-  cancelUser();
-  renderUserList();
-  // 저장 배지
-  const b=document.getElementById('cfgSavedBadge');
-  if(b){b.style.display='block';setTimeout(()=>b.style.display='none',2000);}
-}
-function deleteUser(idx){
-  const users=loadUsers();
-  const u=users[idx]; if(!u||u.fixed) return;
-  if(!confirm(`"${u.name}" (${u.id}) 계정을 삭제하시겠습니까?`)) return;
-  users.splice(idx,1);
-  saveUsers(users);
-  renderUserList();
-}
+function openAddUser(){}
+function editUser(idx){}
+function cancelUser(){}
+function togglePwVisible(){}
+function saveUser(){}
+function deleteUser(idx){}
 
 // ═══════════════════════════════════════════════════════════════
 // WORKER PAGE MODULE
@@ -6938,6 +6766,7 @@ window.onCSharpMessage = function(msg){
     if(msg.type === 'authResult' && msg.data){
       const data = msg.data;
       if(!_loginPending) return;
+      if(data.reqId && String(data.reqId) !== String(_loginPending.reqId)) return;
       if(data.userId && _loginPending.id && data.userId !== _loginPending.id) return;
       if(_loginPending.timer) clearTimeout(_loginPending.timer);
 
@@ -6945,9 +6774,7 @@ window.onCSharpMessage = function(msg){
         const role = (data.role === 'worker') ? 'worker' : 'admin';
         _finalizeLoginSuccess(role, data.userId || _loginPending.id);
       } else {
-        const local=_findLocalAccount(_loginPending.id, _loginPending.pw);
-        if(local) _finalizeLoginSuccess(local.role, local.id);
-        else _finalizeLoginFail();
+        _finalizeLoginFail();
       }
       _loginPending=null;
       return;

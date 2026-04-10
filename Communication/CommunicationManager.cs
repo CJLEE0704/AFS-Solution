@@ -42,6 +42,9 @@ namespace PipeBendingDashboard.Communication
         private readonly SemaphoreSlim _cmdLock = new(1, 1);
         private readonly TimeSpan _readyRefreshInterval = TimeSpan.FromSeconds(1);
         private readonly IReadOnlyDictionary<string, IMachineProtocolAdapter> _protocolAdapters;
+        private LineTopology _topology = new(new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" });
+        private readonly Dictionary<string, string> _lastCorrelationByMachine = new(StringComparer.OrdinalIgnoreCase);
+        private bool _simulationMode = false;
 
         // ── 이벤트 ───────────────────────────────────────────────
         public event Action<string>?                     StatusUpdated;  // JSON
@@ -208,6 +211,7 @@ namespace PipeBendingDashboard.Communication
         {
             var newActive = new HashSet<string>(machineIds.Select(s => s.ToUpper()));
             _activeMachineIds = newActive;
+            _topology = new LineTopology(_activeMachineIds);
 
             // 비활성화된 머신 즉시 연결 해제
             foreach (var id in new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" })
@@ -228,6 +232,8 @@ namespace PipeBendingDashboard.Communication
             }
             NotifyStatusUpdate();
         }
+
+        public void SetSimulationMode(bool on) => _simulationMode = on;
 
         public async Task ConnectAllAsync()
         {
@@ -524,7 +530,7 @@ namespace PipeBendingDashboard.Communication
                     return;
                 }
 
-                var lineInterlockError = ValidateLineInterlock(targetId, cmdType);
+                var lineInterlockError = ValidateLineInterlock(request, status);
                 if (lineInterlockError != null)
                 {
                     LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ 라인 인터락 거부: {lineInterlockError}");
@@ -558,11 +564,22 @@ namespace PipeBendingDashboard.Communication
                 var ack = response.Trim();
                 LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← ACK: {ack}");
                 var structured = adapter.DecodeResponse(request, ack);
+                if (!string.IsNullOrWhiteSpace(structured.CorrelationId)
+                    && !string.Equals(structured.CorrelationId, request.CorrelationId, StringComparison.OrdinalIgnoreCase))
+                {
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:STALE_RESPONSE");
+                    return;
+                }
+                _lastCorrelationByMachine[request.TargetMachineId] = request.CorrelationId;
                 CommandResponseReceived?.Invoke(structured);
 
                 // ── 상태 즉시 갱신 ───────────────────────────────────
                 status.LastMessage = ack;
-                if (structured.ResponseType == MachineResponseType.Alarm || structured.ResponseType == MachineResponseType.Rejected || structured.ResponseType == MachineResponseType.Error)
+                if (structured.ResponseType == MachineResponseType.Alarm
+                    || structured.ResponseType == MachineResponseType.Fault
+                    || structured.ResponseType == MachineResponseType.EmergencyStop
+                    || structured.ResponseType == MachineResponseType.Rejected
+                    || structured.ResponseType == MachineResponseType.Error)
                 {
                     status.HasAlarm = true;
                     status.Status = "FAULT";
@@ -676,8 +693,8 @@ namespace PipeBendingDashboard.Communication
         private async Task HandleAllTargetAsync(WebCommand cmd)
         {
             var type = cmd.Type.ToUpperInvariant();
-            // 정책: ALL 대상은 STOP/STATUS/RESET만 허용
-            if (type != "STOP" && type != "STATUS" && type != "RESET")
+            // 정책: ALL 대상은 STOP/STATUS/RESET/ABORT만 허용
+            if (type != "STOP" && type != "STATUS" && type != "RESET" && type != "ABORT")
             {
                 CommandAck?.Invoke("ALL", cmd.Type, "ERROR:ALL_NOT_ALLOWED");
                 return;
@@ -803,21 +820,46 @@ namespace PipeBendingDashboard.Communication
             if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
         }
 
-        private string? ValidateLineInterlock(string targetId, string cmdType)
+        private string? ValidateLineInterlock(MachineCommandRequest request, MachineStatus status)
         {
-            if (cmdType != "START") return null;
+            var targetId = request.TargetMachineId.ToUpperInvariant();
+            if (!_topology.IsActive(targetId)) return "ERROR:TOPOLOGY_INACTIVE_TARGET";
 
-            bool Ready(string id) => _activeMachineIds.Contains(id) && (GetStatus(id)?.StateCode == "READY");
-            return targetId switch
+            bool IsReady(string id)
+                => _topology.IsActive(id) && (GetStatus(id)?.StateCode == "READY");
+
+            bool needsRouteCheck = request.CommandType == MachineCommandType.Start
+                || request.CommandType == MachineCommandType.ExecuteJob
+                || LineTopology.IsMovementCommand(request.CommandType);
+            if (!needsRouteCheck) return null;
+
+            var upstream = _topology.GetUpstreamCandidates(targetId).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(upstream) && !IsReady(upstream)) return "ERROR:UPSTREAM_NOT_READY";
+
+            if (request.CommandType == MachineCommandType.MoveTransfer)
             {
-                "CUTTING" when !Ready("LOADER") => "ERROR:UPSTREAM_NOT_READY",
-                "LASER" when !Ready("CUTTING") => "ERROR:UPSTREAM_NOT_READY",
-                "ROBOT" when !Ready("LASER") => "ERROR:UPSTREAM_NOT_READY",
-                "ROBOT" when !(Ready("BENDING") || Ready("BENDING2")) => "ERROR:NO_READY_DOWNSTREAM",
-                "BENDING" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
-                "BENDING2" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
-                _ => null
-            };
+                var payloadTarget = request.Payload.Fields.TryGetValue("toStage", out var toStage)
+                    ? toStage?.ToUpperInvariant() ?? ""
+                    : "";
+                if (string.IsNullOrWhiteSpace(payloadTarget)) return "ERROR:MISSING_TRANSFER_TARGET";
+                if (!_topology.IsRouteValid(targetId, payloadTarget)) return "ERROR:INVALID_ROUTE";
+                if (!IsReady(payloadTarget)) return "ERROR:DOWNSTREAM_NOT_READY";
+            }
+
+            if (request.CommandType is MachineCommandType.LoaderJob or MachineCommandType.LoadRequest or MachineCommandType.PrefetchLoad or MachineCommandType.BufferPrepare)
+            {
+                var down = _topology.GetDownstreamCandidates("LOADER").FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(down)) return "ERROR:NO_ACTIVE_DOWNSTREAM";
+                if (!IsReady("LOADER")) return "ERROR:LOADER_NOT_READY";
+                if (!_simulationMode && !IsReady(down)) return "ERROR:DOWNSTREAM_NOT_READY";
+            }
+
+            if (!_simulationMode && LineTopology.IsMovementCommand(request.CommandType) && !status.IsReady)
+            {
+                return "ERROR:MOTION_PERMIT_NOT_READY";
+            }
+
+            return null;
         }
 
         public void Dispose()
@@ -831,6 +873,17 @@ namespace PipeBendingDashboard.Communication
             _bendingClient.Dispose();
             _bending2Client.Dispose();
         }
+
+        public Task SendLoaderJobAsync(string targetMachineId, LoaderJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "LOADER_JOB",
+                CommandType = "LOADER_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromLoader(payload).Raw
+            });
 
         // ── 단계별 Payload 명령 전송 편의 메서드 (내부 모델 기반) ──
         public Task SendCuttingJobAsync(string targetMachineId, CuttingJobPayload payload, string? correlationId = null)
@@ -940,6 +993,10 @@ namespace PipeBendingDashboard.Communication
                 case "STATUS": commandType = MachineCommandType.Status; return true;
                 case "RESET": commandType = MachineCommandType.Reset; return true;
                 case "READY": case "READY?": commandType = MachineCommandType.Ready; return true;
+                case "LOADER_JOB": commandType = MachineCommandType.LoaderJob; return true;
+                case "LOAD_REQUEST": commandType = MachineCommandType.LoadRequest; return true;
+                case "PREFETCH_LOAD": commandType = MachineCommandType.PrefetchLoad; return true;
+                case "BUFFER_PREPARE": commandType = MachineCommandType.BufferPrepare; return true;
                 case "LOAD_JOB": case "JOB_LOAD": commandType = MachineCommandType.LoadJob; return true;
                 case "EXECUTE_JOB": case "JOB_EXEC": commandType = MachineCommandType.ExecuteJob; return true;
                 case "CUTTING_JOB": case "CUT_JOB": commandType = MachineCommandType.CuttingJob; return true;

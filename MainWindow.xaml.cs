@@ -317,6 +317,18 @@ namespace PipeBendingDashboard
                     return;
                 }
 
+                if (cmd.Type.ToUpper() == "SIM_MODE" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    try
+                    {
+                        var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
+                        var on = d.TryGetProperty("on", out var ov) && ov.GetBoolean();
+                        _commMgr.SetSimulationMode(on);
+                    }
+                    catch { _commMgr.SetSimulationMode(false); }
+                    return;
+                }
+
                 // ── 리포트 데이터 요청 (DB 집계) ─────────────────────
                 if (cmd.Type.ToUpper() == "REQUEST_REPORT_DATA" && !string.IsNullOrEmpty(cmd.Data))
                 {

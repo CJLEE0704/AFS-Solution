@@ -5536,6 +5536,7 @@ function quickCmd(t,c,p){
 }
 function toggleSimMode(on){
   simModeOn=on;
+  try{ window.sendToCSharp?.('SIM_MODE','ALL', JSON.stringify({on:!!on})); }catch(e){}
   if(on){
     // 시뮬 ON: 기존 C# 상태(DOWN/미연결)를 초기화 (활성 머신만)
     const activeOnIds = getActiveCommMachineIds();
@@ -6890,6 +6891,13 @@ window.sendSampleCuttingJob = function(target='CUTTING'){
     target,
     commandType:'CUTTING_JOB',
     payload:{ jobId:'CUT-DEMO-001', pipeId:'P-1001', materialCode:'ST', lengthMm:1200, quantity:1, programId:'CUT-PGM-A' }
+  });
+};
+window.sendSampleLoaderJob = function(target='LOADER'){
+  sendStructuredCommand({
+    target,
+    commandType:'LOADER_JOB',
+    payload:{ jobId:'LOAD-DEMO-001', pipeId:'P-1001', sourceRack:'RACK-A', sourceSlot:'S-01', quantity:1, targetStage:'CUTTING', prefetch:true, bufferPrepare:true, sequenceNo:'1' }
   });
 };
 window.sendSampleMarkingJob = function(target='LASER'){

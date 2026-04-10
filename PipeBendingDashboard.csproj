@@ -32,6 +32,7 @@
     <Compile Include="Communication\MachineCommandModels.cs" />
     <Compile Include="Communication\MachineProtocol.cs" />
     <Compile Include="Communication\MachineProtocolAdapter.cs" />
+    <Compile Include="Communication\LineTopology.cs" />
     <Compile Include="Communication\MachineStatus.cs" />
     <Compile Include="Communication\TcpMachineClient.cs" />
     <Compile Include="Database\AppDbContext.cs" />

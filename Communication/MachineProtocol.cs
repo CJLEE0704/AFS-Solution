@@ -178,6 +178,8 @@ namespace PipeBendingDashboard.Communication
             {
                 result.ResponseType = MachineResponseType.Ack;
                 result.IsSuccess = true;
+                var cid = TryExtractToken(raw, "CID");
+                if (!string.IsNullOrWhiteSpace(cid)) result.CorrelationId = cid;
                 return result;
             }
 
@@ -195,6 +197,20 @@ namespace PipeBendingDashboard.Communication
                 return result;
             }
 
+            if (upper.Contains("PERMIT") || upper.Contains("ARMED"))
+            {
+                result.ResponseType = MachineResponseType.PermitGranted;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            if (upper.Contains("ESTOP") || upper.Contains("EMERGENCY_STOP") || upper.Contains("MOTION_INHIBIT"))
+            {
+                result.ResponseType = MachineResponseType.EmergencyStop;
+                result.ErrorCode = "EMERGENCY_STOP";
+                return result;
+            }
+
             if (upper.Contains("FINISH") || upper.Contains("COMPLETE") || upper.Contains("DONE"))
             {
                 result.ResponseType = MachineResponseType.Completed;
@@ -204,19 +220,32 @@ namespace PipeBendingDashboard.Communication
 
             if (upper.Contains("ALARM") || upper.Contains("FAULT"))
             {
-                result.ResponseType = MachineResponseType.Alarm;
-                result.ErrorCode = "ALARM";
+                result.ResponseType = upper.Contains("FAULT") ? MachineResponseType.Fault : MachineResponseType.Alarm;
+                result.ErrorCode = upper.Contains("FAULT") ? "FAULT" : "ALARM";
                 return result;
             }
 
             if (upper.Contains("STATUS") || upper.Contains("READY") || upper.Contains("IDLE") || upper.Contains("BUSY"))
             {
-                result.ResponseType = MachineResponseType.State;
+                result.ResponseType = upper.Contains("READY") || upper.Contains("IDLE")
+                    ? MachineResponseType.Ready
+                    : MachineResponseType.State;
                 result.IsSuccess = true;
                 return result;
             }
 
             return result;
+        }
+
+        private static string TryExtractToken(string raw, string key)
+        {
+            var idx = raw.IndexOf(key + "=", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return "";
+            var start = idx + key.Length + 1;
+            if (start >= raw.Length) return "";
+            var remain = raw[start..];
+            var end = remain.IndexOfAny(new[] { ';', ',', ' ', '\r', '\n' });
+            return (end < 0 ? remain : remain[..end]).Trim();
         }
     }
 }

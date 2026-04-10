@@ -11,6 +11,10 @@ namespace PipeBendingDashboard.Communication
         Status,
         Reset,
         Ready,
+        LoaderJob,
+        LoadRequest,
+        PrefetchLoad,
+        BufferPrepare,
         LoadJob,
         ExecuteJob,
         CuttingJob,
@@ -25,9 +29,13 @@ namespace PipeBendingDashboard.Communication
     {
         Ack,
         Rejected,
+        Ready,
+        PermitGranted,
         InProgress,
         Completed,
         Alarm,
+        Fault,
+        EmergencyStop,
         State,
         Error,
         Unknown
@@ -50,6 +58,19 @@ namespace PipeBendingDashboard.Communication
         public double LengthMm { get; set; }
         public int Quantity { get; set; } = 1;
         public string ProgramId { get; set; } = "";
+    }
+
+    public sealed class LoaderJobPayload
+    {
+        public string JobId { get; set; } = "";
+        public string PipeId { get; set; } = "";
+        public string SourceRack { get; set; } = "";
+        public string SourceSlot { get; set; } = "";
+        public int Quantity { get; set; } = 1;
+        public string TargetStage { get; set; } = "";
+        public bool Prefetch { get; set; }
+        public bool BufferPrepare { get; set; }
+        public string SequenceNo { get; set; } = "";
     }
 
     public sealed class MarkingJobPayload
@@ -91,6 +112,7 @@ namespace PipeBendingDashboard.Communication
         private static readonly JsonSerializerOptions _jsonOpt = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         public static MachineCommandPayload FromCutting(CuttingJobPayload payload) => FromModel(payload);
+        public static MachineCommandPayload FromLoader(LoaderJobPayload payload) => FromModel(payload);
         public static MachineCommandPayload FromMarking(MarkingJobPayload payload) => FromModel(payload);
         public static MachineCommandPayload FromRobotTransfer(RobotTransferPayload payload) => FromModel(payload);
         public static MachineCommandPayload FromBending(BendingJobPayload payload) => FromModel(payload);

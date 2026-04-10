@@ -8,6 +8,7 @@ namespace PipeBendingDashboard.Communication
     public interface IMachineProtocolAdapter
     {
         string MachineId { get; }
+        ProtocolProfile Profile { get; }
         string? GetReadyCommand();
         string GetStatusCommand();
         string? ResolveCommand(string commandType);
@@ -26,16 +27,25 @@ namespace PipeBendingDashboard.Communication
         HOLD
     }
 
+    public enum ProtocolProfile
+    {
+        Internal,
+        VendorA,
+        VendorB
+    }
+
     public sealed class DefaultMachineProtocolAdapter : IMachineProtocolAdapter
     {
         private readonly Dictionary<string, string> _commands;
         private readonly string _wirePrefix;
         public string MachineId { get; }
+        public ProtocolProfile Profile { get; }
 
-        public DefaultMachineProtocolAdapter(string machineId, Dictionary<string, string> commands)
+        public DefaultMachineProtocolAdapter(string machineId, Dictionary<string, string> commands, ProtocolProfile profile = ProtocolProfile.Internal)
         {
             MachineId = machineId;
             _commands = commands;
+            Profile = profile;
             _wirePrefix = commands.TryGetValue("STATUS", out var st) && st.Contains(':')
                 ? st[..st.IndexOf(':')]
                 : machineId;
@@ -53,6 +63,10 @@ namespace PipeBendingDashboard.Communication
 
             return request.CommandType switch
             {
+                MachineCommandType.LoaderJob    => BuildInternalFrame("LOADER_JOB", request),
+                MachineCommandType.LoadRequest  => BuildInternalFrame("LOAD_REQUEST", request),
+                MachineCommandType.PrefetchLoad => BuildInternalFrame("PREFETCH_LOAD", request),
+                MachineCommandType.BufferPrepare=> BuildInternalFrame("BUFFER_PREPARE", request),
                 MachineCommandType.LoadJob      => BuildInternalFrame("JOB_LOAD", request),
                 MachineCommandType.ExecuteJob   => BuildInternalFrame("JOB_EXEC", request),
                 MachineCommandType.CuttingJob   => BuildInternalFrame("CUTTING_JOB", request),
@@ -104,15 +118,15 @@ namespace PipeBendingDashboard.Communication
 
     public static class MachineProtocolRegistry
     {
-        public static IReadOnlyDictionary<string, IMachineProtocolAdapter> BuildDefaults()
+        public static IReadOnlyDictionary<string, IMachineProtocolAdapter> BuildDefaults(ProtocolProfile profile = ProtocolProfile.Internal)
             => new Dictionary<string, IMachineProtocolAdapter>(StringComparer.OrdinalIgnoreCase)
             {
-                ["LOADER"] = new DefaultMachineProtocolAdapter("LOADER", new Dictionary<string, string>{{"READY", MachineProtocol.Loader.Ready},{"START",MachineProtocol.Loader.Start},{"STOP",MachineProtocol.Loader.Stop},{"RESET",MachineProtocol.Loader.Reset},{"STATUS",MachineProtocol.Loader.Status}}),
-                ["CUTTING"] = new DefaultMachineProtocolAdapter("CUTTING", new Dictionary<string, string>{{"READY", MachineProtocol.Cutting.Ready},{"START",MachineProtocol.Cutting.Start},{"STOP",MachineProtocol.Cutting.Stop},{"RESET",MachineProtocol.Cutting.Reset},{"STATUS",MachineProtocol.Cutting.Status}}),
-                ["LASER"] = new DefaultMachineProtocolAdapter("LASER", new Dictionary<string, string>{{"READY", MachineProtocol.Laser.Ready},{"START",MachineProtocol.Laser.Start},{"STOP",MachineProtocol.Laser.Stop},{"RESET",MachineProtocol.Laser.Reset},{"STATUS",MachineProtocol.Laser.Status}}),
-                ["ROBOT"] = new DefaultMachineProtocolAdapter("ROBOT", new Dictionary<string, string>{{"READY", MachineProtocol.Robot.Ready},{"START",MachineProtocol.Robot.Start},{"STOP",MachineProtocol.Robot.Stop},{"RESET",MachineProtocol.Robot.Reset},{"STATUS",MachineProtocol.Robot.Status}}),
-                ["BENDING"] = new DefaultMachineProtocolAdapter("BENDING", new Dictionary<string, string>{{"READY", MachineProtocol.Bending.Ready},{"START",MachineProtocol.Bending.Start},{"STOP",MachineProtocol.Bending.Stop},{"RESET",MachineProtocol.Bending.Reset},{"STATUS",MachineProtocol.Bending.Status}}),
-                ["BENDING2"] = new DefaultMachineProtocolAdapter("BENDING2", new Dictionary<string, string>{{"READY", MachineProtocol.Bending2.Ready},{"START",MachineProtocol.Bending2.Start},{"STOP",MachineProtocol.Bending2.Stop},{"RESET",MachineProtocol.Bending2.Reset},{"STATUS",MachineProtocol.Bending2.Status}}),
+                ["LOADER"] = new DefaultMachineProtocolAdapter("LOADER", new Dictionary<string, string>{{"READY", MachineProtocol.Loader.Ready},{"START",MachineProtocol.Loader.Start},{"STOP",MachineProtocol.Loader.Stop},{"RESET",MachineProtocol.Loader.Reset},{"STATUS",MachineProtocol.Loader.Status}}, profile),
+                ["CUTTING"] = new DefaultMachineProtocolAdapter("CUTTING", new Dictionary<string, string>{{"READY", MachineProtocol.Cutting.Ready},{"START",MachineProtocol.Cutting.Start},{"STOP",MachineProtocol.Cutting.Stop},{"RESET",MachineProtocol.Cutting.Reset},{"STATUS",MachineProtocol.Cutting.Status}}, profile),
+                ["LASER"] = new DefaultMachineProtocolAdapter("LASER", new Dictionary<string, string>{{"READY", MachineProtocol.Laser.Ready},{"START",MachineProtocol.Laser.Start},{"STOP",MachineProtocol.Laser.Stop},{"RESET",MachineProtocol.Laser.Reset},{"STATUS",MachineProtocol.Laser.Status}}, profile),
+                ["ROBOT"] = new DefaultMachineProtocolAdapter("ROBOT", new Dictionary<string, string>{{"READY", MachineProtocol.Robot.Ready},{"START",MachineProtocol.Robot.Start},{"STOP",MachineProtocol.Robot.Stop},{"RESET",MachineProtocol.Robot.Reset},{"STATUS",MachineProtocol.Robot.Status}}, profile),
+                ["BENDING"] = new DefaultMachineProtocolAdapter("BENDING", new Dictionary<string, string>{{"READY", MachineProtocol.Bending.Ready},{"START",MachineProtocol.Bending.Start},{"STOP",MachineProtocol.Bending.Stop},{"RESET",MachineProtocol.Bending.Reset},{"STATUS",MachineProtocol.Bending.Status}}, profile),
+                ["BENDING2"] = new DefaultMachineProtocolAdapter("BENDING2", new Dictionary<string, string>{{"READY", MachineProtocol.Bending2.Ready},{"START",MachineProtocol.Bending2.Start},{"STOP",MachineProtocol.Bending2.Stop},{"RESET",MachineProtocol.Bending2.Reset},{"STATUS",MachineProtocol.Bending2.Status}}, profile),
             };
     }
 }

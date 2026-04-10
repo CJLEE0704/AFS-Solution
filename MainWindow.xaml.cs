@@ -317,6 +317,18 @@ namespace PipeBendingDashboard
                     return;
                 }
 
+                if (cmd.Type.ToUpper() == "SIM_MODE" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    try
+                    {
+                        var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
+                        var on = d.TryGetProperty("on", out var ov) && ov.GetBoolean();
+                        _commMgr.SetSimulationMode(on);
+                    }
+                    catch { _commMgr.SetSimulationMode(false); }
+                    return;
+                }
+
                 // ── 리포트 데이터 요청 (DB 집계) ─────────────────────
                 if (cmd.Type.ToUpper() == "REQUEST_REPORT_DATA" && !string.IsNullOrEmpty(cmd.Data))
                 {
@@ -367,6 +379,24 @@ namespace PipeBendingDashboard
                 if (cmd.Type.ToUpper() == "AUTH_LOGIN" && !string.IsNullOrEmpty(cmd.Data))
                 {
                     await HandleAuthLoginAsync(cmd.Data);
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "REQUEST_USERS")
+                {
+                    await HandleRequestUsersAsync();
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "UPSERT_USER" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleUpsertUserAsync(cmd.Data);
+                    return;
+                }
+
+                if (cmd.Type.ToUpper() == "DELETE_USER" && !string.IsNullOrEmpty(cmd.Data))
+                {
+                    await HandleDeleteUserAsync(cmd.Data);
                     return;
                 }
 
@@ -623,17 +653,39 @@ namespace PipeBendingDashboard
 
         private async Task HandleAuthLoginAsync(string dataJson)
         {
-            if (_db == null || !_db.IsAvailable) return;
+            string userId = "";
+            string reqId = "";
             try
             {
                 var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
-                var userId = d.GetProperty("id").GetString() ?? "";
+                userId = d.GetProperty("id").GetString() ?? "";
                 var pw = d.GetProperty("pw").GetString() ?? "";
+                reqId = d.TryGetProperty("reqId", out var rq) ? rq.GetString() ?? "" : "";
+
+                if (_db == null || !_db.IsAvailable)
+                {
+                    var failNoDb = JsonSerializer.Serialize(new
+                    {
+                        type = "authResult",
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "DB_UNAVAILABLE" }
+                    });
+                    Dispatcher.Invoke(() => SendToWebView(failNoDb));
+                    return;
+                }
+
                 var result = await _db.AuthenticateAsync(userId, pw);
                 var json = JsonSerializer.Serialize(new
                 {
                     type = "authResult",
-                    data = new { ok = result.ok, role = result.role, userName = result.userName, userId }
+                    data = new
+                    {
+                        ok = result.ok,
+                        role = result.role,
+                        userName = result.userName,
+                        userId,
+                        reqId,
+                        message = result.ok ? "OK" : "INVALID_CREDENTIALS"
+                    }
                 });
                 Dispatcher.Invoke(() => SendToWebView(json));
                 if (result.ok)
@@ -642,6 +694,102 @@ namespace PipeBendingDashboard
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[DB] auth 오류: {ex.Message}");
+                try
+                {
+                    var failJson = JsonSerializer.Serialize(new
+                    {
+                        type = "authResult",
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "AUTH_EXCEPTION" }
+                    });
+                    Dispatcher.Invoke(() => SendToWebView(failJson));
+                }
+                catch { }
+            }
+        }
+
+        private async Task HandleRequestUsersAsync()
+        {
+            if (_db == null || !_db.IsAvailable)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "usersData",
+                    data = Array.Empty<object>()
+                })));
+                return;
+            }
+            var users = await _db.GetUsersAsync();
+            Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+            {
+                type = "usersData",
+                data = users
+            })));
+        }
+
+        private async Task HandleUpsertUserAsync(string dataJson)
+        {
+            try
+            {
+                if (_db == null || !_db.IsAvailable)
+                {
+                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                    {
+                        type = "userSaved",
+                        data = new { ok = false, message = "DB_UNAVAILABLE" }
+                    })));
+                    return;
+                }
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                var userId = d.GetProperty("id").GetString() ?? "";
+                var userName = d.TryGetProperty("name", out var nv) ? nv.GetString() ?? userId : userId;
+                var pw = d.TryGetProperty("pw", out var pv) ? pv.GetString() ?? "" : "";
+                var role = d.TryGetProperty("role", out var rv) ? rv.GetString() ?? "worker" : "worker";
+                var res = await _db.UpsertUserAsync(userId, userName, pw, role);
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userSaved",
+                    data = new { ok = res.ok, message = res.message, id = userId }
+                })));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userSaved",
+                    data = new { ok = false, message = ex.Message }
+                })));
+            }
+        }
+
+        private async Task HandleDeleteUserAsync(string dataJson)
+        {
+            try
+            {
+                if (_db == null || !_db.IsAvailable)
+                {
+                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                    {
+                        type = "userDeleted",
+                        data = new { ok = false, message = "DB_UNAVAILABLE" }
+                    })));
+                    return;
+                }
+                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
+                var userId = d.GetProperty("id").GetString() ?? "";
+                var res = await _db.DeactivateUserAsync(userId);
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userDeleted",
+                    data = new { ok = res.ok, message = res.message, id = userId }
+                })));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+                {
+                    type = "userDeleted",
+                    data = new { ok = false, message = ex.Message }
+                })));
             }
         }
 

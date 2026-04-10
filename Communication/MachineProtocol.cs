@@ -1,3 +1,5 @@
+using System;
+
 namespace PipeBendingDashboard.Communication
 {
     public sealed class ParsedMachineStatus
@@ -143,6 +145,107 @@ namespace PipeBendingDashboard.Communication
             }
 
             return parsed;
+        }
+
+        public static MachineCommandResponse ParseCommandResponse(
+            string machineId,
+            MachineCommandType commandType,
+            string response,
+            string correlationId = "")
+        {
+            var raw = response?.Trim() ?? "";
+            var upper = raw.ToUpperInvariant();
+
+            var result = new MachineCommandResponse
+            {
+                MachineId = machineId,
+                CommandType = commandType,
+                RawResponse = raw,
+                CorrelationId = correlationId,
+                ReceivedAtUtc = DateTime.UtcNow,
+                ResponseType = MachineResponseType.Unknown,
+                IsSuccess = false
+            };
+
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                result.ResponseType = MachineResponseType.Error;
+                result.ErrorCode = "NO_RESPONSE";
+                return result;
+            }
+
+            if (upper.StartsWith("OK"))
+            {
+                result.ResponseType = MachineResponseType.Ack;
+                result.IsSuccess = true;
+                var cid = TryExtractToken(raw, "CID");
+                if (!string.IsNullOrWhiteSpace(cid)) result.CorrelationId = cid;
+                return result;
+            }
+
+            if (upper.StartsWith("ERROR") || upper.StartsWith("FAIL") || upper.StartsWith("NACK"))
+            {
+                result.ResponseType = MachineResponseType.Rejected;
+                result.ErrorCode = "COMMAND_REJECTED";
+                return result;
+            }
+
+            if (upper.Contains("RUNNING") || upper.Contains("WORKING") || upper.Contains("IN_PROGRESS"))
+            {
+                result.ResponseType = MachineResponseType.InProgress;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            if (upper.Contains("PERMIT") || upper.Contains("ARMED"))
+            {
+                result.ResponseType = MachineResponseType.PermitGranted;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            if (upper.Contains("ESTOP") || upper.Contains("EMERGENCY_STOP") || upper.Contains("MOTION_INHIBIT"))
+            {
+                result.ResponseType = MachineResponseType.EmergencyStop;
+                result.ErrorCode = "EMERGENCY_STOP";
+                return result;
+            }
+
+            if (upper.Contains("FINISH") || upper.Contains("COMPLETE") || upper.Contains("DONE"))
+            {
+                result.ResponseType = MachineResponseType.Completed;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            if (upper.Contains("ALARM") || upper.Contains("FAULT"))
+            {
+                result.ResponseType = upper.Contains("FAULT") ? MachineResponseType.Fault : MachineResponseType.Alarm;
+                result.ErrorCode = upper.Contains("FAULT") ? "FAULT" : "ALARM";
+                return result;
+            }
+
+            if (upper.Contains("STATUS") || upper.Contains("READY") || upper.Contains("IDLE") || upper.Contains("BUSY"))
+            {
+                result.ResponseType = upper.Contains("READY") || upper.Contains("IDLE")
+                    ? MachineResponseType.Ready
+                    : MachineResponseType.State;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            return result;
+        }
+
+        private static string TryExtractToken(string raw, string key)
+        {
+            var idx = raw.IndexOf(key + "=", StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return "";
+            var start = idx + key.Length + 1;
+            if (start >= raw.Length) return "";
+            var remain = raw[start..];
+            var end = remain.IndexOfAny(new[] { ';', ',', ' ', '\r', '\n' });
+            return (end < 0 ? remain : remain[..end]).Trim();
         }
     }
 }

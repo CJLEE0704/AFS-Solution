@@ -1713,16 +1713,46 @@ function setRole(role){
   if(role==='admin'){
     ab.style.cssText+=';border-color:var(--cyan);background:var(--cg);color:var(--cyan)';
     wb.style.cssText+=';border-color:var(--border);background:transparent;color:var(--dim)';
-    document.getElementById('loginId').value='admin';
   } else {
     wb.style.cssText+=';border-color:#6FB58A;background:rgba(111,181,138,.15);color:#6FB58A';
     ab.style.cssText+=';border-color:var(--border);background:transparent;color:var(--dim)';
-    document.getElementById('loginId').value='worker';
   }
   document.getElementById('loginPw').value='';
   document.getElementById('loginPw').focus();
 }
-const ACCOUNTS={admin:{id:'admin',pw:'admin'},worker:{id:'worker',pw:'worker'}};
+let _loginPending=null; // { id, pw, reqId, timer }
+let _loginReqSeq=0;
+
+function _finalizeLoginSuccess(role,userId){
+  userRole=role;
+  currentUserId=userId;
+  const err=document.getElementById('loginErr');
+  if(err) err.classList.remove('show');
+  const ls=document.getElementById('loginScreen');
+  ls.style.transition='opacity .4s';ls.style.opacity='0';
+  setTimeout(()=>{
+    ls.style.display='none';
+    document.getElementById('sidebar').style.display='flex';
+    const menuBtn = document.getElementById('sidebar-menu-btn');
+    if(menuBtn) menuBtn.style.display = (userRole==='worker') ? 'none' : 'flex';
+    document.getElementById('main').style.display='flex';
+    afterLogin();
+  },400);
+}
+
+function _finalizeLoginFail(){
+  const err=document.getElementById('loginErr');
+  err.classList.add('show');
+  ['loginId','loginPw'].forEach(eid=>{
+    const el=document.getElementById(eid);
+    el.classList.add('err');
+    el.style.animation='none';requestAnimationFrame(()=>{el.style.animation='shake .4s';});
+    setTimeout(()=>el.classList.remove('err'),1200);
+  });
+  document.getElementById('loginPw').value='';
+}
+window._finalizeLoginSuccess = _finalizeLoginSuccess;
+window._finalizeLoginFail = _finalizeLoginFail;
 function syncHostWindowChrome(){
   try{
     let mode='normal';
@@ -1747,45 +1777,27 @@ function syncHostWindowChrome(){
 function doLogin(){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPw').value.trim();
-  const err=document.getElementById('loginErr');
-  // 로컬 사용자 목록도 포함해서 인증
-  const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
-  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
-  if(!found){
-    // 레거시/초기 계정 fallback
-    const legacy = [
-      {id:'admin', pw:'admin', role:'admin'},
-      {id:'iaan',  pw:'iaan',  role:'admin'},
-      {id:'worker',pw:'worker',role:'worker'}
-    ];
-    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
+  if(!id || !pw){
+    _finalizeLoginFail();
+    return;
   }
-  const acc=found?[found.role,{id:found.id,pw:found.pw}]:null;
-  if(acc){
-    userRole=acc[0];
-    currentUserId=acc[1].id;  // ← 로그인 사용자 ID 저장
-    err.classList.remove('show');
-    const ls=document.getElementById('loginScreen');
-    ls.style.transition='opacity .4s';ls.style.opacity='0';
-    setTimeout(()=>{
-      ls.style.display='none';
-      document.getElementById('sidebar').style.display='flex';
-    // Worker는 사이드바 토글 버튼 숨김
-    const menuBtn = document.getElementById('sidebar-menu-btn');
-    if(menuBtn) menuBtn.style.display = (userRole==='worker') ? 'none' : 'flex';
-      document.getElementById('main').style.display='flex';
-      afterLogin();
-    },400);
-  } else {
-    err.classList.add('show');
-    ['loginId','loginPw'].forEach(eid=>{
-      const el=document.getElementById(eid);
-      el.classList.add('err');
-      el.style.animation='none';requestAnimationFrame(()=>{el.style.animation='shake .4s';});
-      setTimeout(()=>el.classList.remove('err'),1200);
-    });
-    document.getElementById('loginPw').value='';
+
+  // DB 전용 인증 (WebView2 환경)
+  if(window.chrome?.webview){
+    const reqId = (++_loginReqSeq);
+    if(_loginPending?.timer) clearTimeout(_loginPending.timer);
+    _loginPending = { id, pw, reqId, timer: null };
+    window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
+    _loginPending.timer = setTimeout(()=>{
+      if(!_loginPending || _loginPending.reqId!==reqId) return;
+      _finalizeLoginFail();
+      _loginPending=null;
+    }, 2500);
+    return;
   }
+
+  // 브라우저 단독 실행: DB 경로 없음 → 실패 처리
+  _finalizeLoginFail();
 }
 
 function afterLogin(){
@@ -1987,8 +1999,14 @@ function setMenu(id){
     requestAnimationFrame(()=>{
       drawWeekly();
       renderDashProjectStats();
-      // 대시보드 돌아올 때 자동 애니메이션 재시작
-      if(!dashAutoRunning) setTimeout(()=>startDashAuto(), 400);
+      // 대시보드 자동 애니메이션은 시뮬레이션 모드에서만 동작
+      if(simModeOn){
+        if(!dashAutoRunning) setTimeout(()=>{
+          if(simModeOn && activeMenu==='dashboard') startDashAuto();
+        }, 400);
+      } else {
+        stopDashAuto();
+      }
     });
   } else if(id==='operation'){
     document.getElementById('op-page').classList.add('show');
@@ -2247,14 +2265,17 @@ let dashAutoTimer=null, dashAutoStep=0, dashAutoRunning=false;
 
 function startDashAuto(){
   if(dashAutoRunning) return;
+  if(!simModeOn) return;
+
+  const svg=document.getElementById('flowSvg');
+  if(!svg) return;
+
   dashAutoRunning=true;
   dashAutoStep=0;  // 항상 로더(step 0)부터 시작
 
   const ptg=document.getElementById('ptg');
   if(ptg){ptg.style.transition='opacity 0.4s';ptg.style.opacity='0';}
 
-  const svg=document.getElementById('flowSvg');
-  if(!svg) return;
   // 기존 배관 제거 후 재생성 (항상 start 위치에서)
   const old=document.getElementById('dashMovingPipe'); if(old) old.remove();
   dashPipeCurX=-270; dashPipeEl=null;
@@ -2410,6 +2431,10 @@ function getDashCycleSteps(machines){
 }
 function dashAutoLoop(){
   if(!dashAutoRunning) return;
+  if(!simModeOn){
+    stopDashAuto();
+    return;
+  }
   const cfg=getActiveConfig();
   const steps=getDashCycleSteps(cfg.machines);
   const stepIdx=dashAutoStep % steps.length;
@@ -5511,6 +5536,7 @@ function quickCmd(t,c,p){
 }
 function toggleSimMode(on){
   simModeOn=on;
+  try{ window.sendToCSharp?.('SIM_MODE','ALL', JSON.stringify({on:!!on})); }catch(e){}
   if(on){
     // 시뮬 ON: 기존 C# 상태(DOWN/미연결)를 초기화 (활성 머신만)
     const activeOnIds = getActiveCommMachineIds();
@@ -5522,7 +5548,13 @@ function toggleSimMode(on){
     });
     applyConfigToComm(); // 구성 반영 + 시뮬 타이머 시작
     clog('SYS','SIM','시뮬레이션 모드 ON — 실제 TCP 연결 없이 테스트','#6FB6C9');
+    if(activeMenu==='dashboard'){
+      if(!dashAutoRunning) setTimeout(()=>{
+        if(simModeOn && activeMenu==='dashboard') startDashAuto();
+      }, 0);
+    }
   } else {
+    stopDashAuto();
     stopSim();
     // 실제 통신 모드: machSt 연결 상태 초기화 (C# 폴링이 갱신)
     MACHINES.forEach(m=>{
@@ -6157,11 +6189,10 @@ function initSettingsPage(){
   const settGrid = document.getElementById('settGrid');
 
   if(userRole==='admin'){
-    // Admin: 계정 관리 전체 너비, 장비 구성 숨김
-    if(sub) sub.textContent='작업자 · 관리자 계정 관리';
+    if(sub) sub.textContent='DB 사용자 관리';
     if(cfgSection){ cfgSection.style.display='none'; }
     if(userSection){ userSection.style.display='flex'; userSection.style.flex='1'; }
-    renderUserList();
+    requestUsersFromDb();
   } else {
     // Worker: 장비 구성 전체 너비, 계정 관리 숨김
     if(sub) sub.textContent='장비 구성 선택 · 선택한 장비만 Operation에서 가동';
@@ -6173,104 +6204,34 @@ function initSettingsPage(){
   }
 }
 
-// ── 계정 관리 ──
-// 기본 계정 (변경 불가)
-const DEFAULT_ACCOUNTS=[
-  {id:'admin', name:'관리자',  pw:'admin',  role:'admin',  fixed:true},
-  {id:'iaan',  name:'관리자(legacy)',  pw:'iaan',  role:'admin',  fixed:true},
-  {id:'worker',name:'작업자',  pw:'worker', role:'worker', fixed:true},
-];
-let userEditIdx = null; // null=신규, number=수정 인덱스
+// ── 계정 관리 (DB users 테이블 기반) ──
+let _dbUsers = [];
+let userEditIdx = null;
 
-function loadUsers(){
-  try{
-    const s=localStorage.getItem('bpd_users');
-    if(s) return [...DEFAULT_ACCOUNTS,...JSON.parse(s)];
-  }catch(e){}
-  return [...DEFAULT_ACCOUNTS];
-}
-function saveUsers(users){
-  const custom=users.filter(u=>!u.fixed);
-  try{localStorage.setItem('bpd_users',JSON.stringify(custom));}catch(e){}
-  // ACCOUNTS 동기화
-  users.forEach(u=>{ ACCOUNTS[u.role+'_'+u.id]={id:u.id,pw:u.pw}; });
-  // 기본 계정은 항상 유지
-  ACCOUNTS.admin={id:'admin',pw:'admin'};
-  ACCOUNTS.admin_iaan={id:'iaan',pw:'iaan'};
-  ACCOUNTS.worker={id:'worker',pw:'worker'};
+function requestUsersFromDb(){
+  window.sendToCSharp?.('REQUEST_USERS','ALL','');
 }
 
 function renderUserList(){
   const el=document.getElementById('userList'); if(!el) return;
-  const users=loadUsers();
-  const fixed=users.filter(u=>u.fixed);
-  const custom=users.filter(u=>!u.fixed);
-
+  if(!_dbUsers.length){
+    el.innerHTML = `<div style="text-align:center;padding:20px 10px;color:var(--dim);font-size:9px;border:1px dashed var(--border);border-radius:6px">등록된 사용자가 없습니다</div>`;
+    return;
+  }
   const roleCol=r=>r==='admin'?'#6FB6C9':'#6FB58A';
   const roleIcon=r=>r==='admin'?'👔':'🔧';
-  const roleTxt=r=>r==='admin'?'관리자':'작업자';
-
-  const fixedHtml=fixed.map(u=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
-                border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
-      <div style="width:28px;height:28px;border-radius:50%;background:${roleCol(u.role)}22;
-                  border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">
-        ${roleIcon(u.role)}
-      </div>
+  el.innerHTML = _dbUsers.map((u,idx)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
+      <div style="width:26px;height:26px;border-radius:50%;background:${roleCol(u.role)}22;border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">${roleIcon(u.role)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name}</div>
-        <div style="font-size:8.5px;color:var(--dim);font-family:monospace">${u.id}
-          <span style="margin-left:5px;padding:1px 6px;border-radius:3px;font-size:7.5px;font-weight:700;
-            background:${roleCol(u.role)}18;color:${roleCol(u.role)};border:1px solid ${roleCol(u.role)}33">${roleTxt(u.role)}</span>
-        </div>
+        <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name||u.id}</div>
+        <div style="font-size:8px;color:var(--dim);font-family:monospace">${u.id}</div>
       </div>
-      <span style="font-size:8px;color:var(--dim);padding:2px 8px;border-radius:3px;
-                   background:var(--panel2);border:1px solid var(--border)">기본계정</span>
+      ${u.fixedUser ? `<span style="font-size:8px;color:var(--dim);padding:2px 8px;border-radius:3px;background:var(--panel2);border:1px solid var(--border)">고정</span>` : `
+        <button onclick="editUser(${idx})" style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid var(--border2);color:var(--text);font-size:8.5px;cursor:pointer;flex-shrink:0">수정</button>
+        <button onclick="deleteUser(${idx})" style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid rgba(199,110,130,.4);color:var(--red);font-size:8.5px;cursor:pointer;flex-shrink:0">삭제</button>`}
     </div>`).join('');
-
-  // 구분선 + 사용자 목록 헤더
-  const sepHtml=`
-    <div style="margin:12px 0 8px;display:flex;align-items:center;gap:8px">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="font-size:8px;font-weight:700;color:var(--dim);letter-spacing:1px;text-transform:uppercase;flex-shrink:0">
-        사용자 목록 (${custom.length}명)
-      </span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>`;
-
-  const customHtml = custom.length===0
-    ? `<div style="text-align:center;padding:20px 10px;color:var(--dim);font-size:9px;
-                   border:1px dashed var(--border);border-radius:6px">
-         아직 추가된 사용자가 없습니다<br>
-         <span style="font-size:8px;opacity:.6">상단 [+ 계정 추가] 버튼으로 추가하세요</span>
-       </div>`
-    : custom.map((u,ci)=>{
-        const gi=users.indexOf(u); // 전체 배열 인덱스
-        return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
-                            border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
-          <div style="width:26px;height:26px;border-radius:50%;background:${roleCol(u.role)}22;
-                      border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">
-            ${roleIcon(u.role)}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name}</div>
-            <div style="font-size:8px;color:var(--dim);font-family:monospace">${u.id}
-              <span style="margin-left:5px;padding:1px 6px;border-radius:3px;font-size:7px;font-weight:700;
-                background:${roleCol(u.role)}18;color:${roleCol(u.role)};border:1px solid ${roleCol(u.role)}33">${roleTxt(u.role)}</span>
-            </div>
-          </div>
-          <button onclick="editUser(${gi})"
-            style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid var(--border2);
-                   color:var(--text);font-size:8.5px;cursor:pointer;flex-shrink:0">수정</button>
-          <button onclick="deleteUser(${gi})"
-            style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid rgba(199,110,130,.4);
-                   color:var(--red);font-size:8.5px;cursor:pointer;flex-shrink:0">삭제</button>
-        </div>`;
-      }).join('');
-
-  el.innerHTML = fixedHtml + sepHtml + customHtml;
 }
-
 function openAddUser(){
   userEditIdx=null;
   document.getElementById('userFormTitle').textContent='새 계정 추가';
@@ -6280,61 +6241,34 @@ function openAddUser(){
   document.getElementById('uRole').value='worker';
   document.getElementById('userFormErr').style.display='none';
   document.getElementById('userForm').style.display='block';
-  document.getElementById('uName').focus();
 }
 function editUser(idx){
-  const users=loadUsers();
-  const u=users[idx]; if(!u||u.fixed) return;
+  const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
   userEditIdx=idx;
   document.getElementById('userFormTitle').textContent='계정 수정';
-  document.getElementById('uName').value=u.name;
-  document.getElementById('uId').value=u.id;
-  document.getElementById('uPw').value=u.pw;
-  document.getElementById('uRole').value=u.role;
+  document.getElementById('uName').value=u.name||'';
+  document.getElementById('uId').value=u.id||'';
+  document.getElementById('uPw').value='';
+  document.getElementById('uRole').value=u.role||'worker';
   document.getElementById('userFormErr').style.display='none';
   document.getElementById('userForm').style.display='block';
 }
-function cancelUser(){
-  document.getElementById('userForm').style.display='none';
-  userEditIdx=null;
-}
-function togglePwVisible(){
-  const el=document.getElementById('uPw');
-  el.type=el.type==='password'?'text':'password';
-}
+function cancelUser(){ document.getElementById('userForm').style.display='none'; userEditIdx=null; }
+function togglePwVisible(){ const el=document.getElementById('uPw'); el.type=el.type==='password'?'text':'password'; }
 function saveUser(){
-  const name=document.getElementById('uName').value.trim();
   const id=document.getElementById('uId').value.trim();
+  const name=document.getElementById('uName').value.trim()||id;
   const pw=document.getElementById('uPw').value.trim();
   const role=document.getElementById('uRole').value;
   const errEl=document.getElementById('userFormErr');
-  // 유효성
-  if(!name||!id||!pw){errEl.style.display='block';errEl.textContent='모든 항목을 입력하세요';return;}
-  if(id.length<3){errEl.style.display='block';errEl.textContent='아이디는 3자 이상이어야 합니다';return;}
-  if(pw.length<4){errEl.style.display='block';errEl.textContent='비밀번호는 4자 이상이어야 합니다';return;}
-  let users=loadUsers();
-  // 중복 체크
-  const dupIdx=users.findIndex((u,i)=>u.id===id&&i!==userEditIdx);
-  if(dupIdx>=0){errEl.style.display='block';errEl.textContent='이미 사용 중인 아이디입니다';return;}
-  if(userEditIdx===null){
-    users.push({id,name,pw,role,fixed:false});
-  } else {
-    users[userEditIdx]={...users[userEditIdx],name,id,pw,role};
-  }
-  saveUsers(users);
-  cancelUser();
-  renderUserList();
-  // 저장 배지
-  const b=document.getElementById('cfgSavedBadge');
-  if(b){b.style.display='block';setTimeout(()=>b.style.display='none',2000);}
+  if(!id){errEl.style.display='block';errEl.textContent='아이디를 입력하세요';return;}
+  if(userEditIdx===null && !pw){errEl.style.display='block';errEl.textContent='신규 계정은 비밀번호가 필요합니다';return;}
+  window.sendToCSharp?.('UPSERT_USER','AUTH', JSON.stringify({id,name,pw,role}));
 }
 function deleteUser(idx){
-  const users=loadUsers();
-  const u=users[idx]; if(!u||u.fixed) return;
-  if(!confirm(`"${u.name}" (${u.id}) 계정을 삭제하시겠습니까?`)) return;
-  users.splice(idx,1);
-  saveUsers(users);
-  renderUserList();
+  const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
+  if(!confirm(`"${u.name||u.id}" (${u.id}) 계정을 비활성화하시겠습니까?`)) return;
+  window.sendToCSharp?.('DELETE_USER','AUTH', JSON.stringify({id:u.id}));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6884,6 +6818,52 @@ window.onCSharpMessage = function(msg){
         ok ? 'var(--green)' : 'var(--yellow)');
     }
 
+    if(msg.type === 'usersData' && Array.isArray(msg.data)){
+      _dbUsers = msg.data.map(u=>({
+        id:u.id, name:u.name, role:u.role||'worker', fixedUser:!!u.fixedUser
+      }));
+      renderUserList();
+      return;
+    }
+
+    if(msg.type === 'userSaved' && msg.data){
+      if(msg.data.ok){
+        cancelUser();
+        requestUsersFromDb();
+      } else {
+        const errEl=document.getElementById('userFormErr');
+        if(errEl){ errEl.style.display='block'; errEl.textContent=msg.data.message||'저장 실패'; }
+      }
+      return;
+    }
+
+    if(msg.type === 'userDeleted' && msg.data){
+      if(msg.data.ok){
+        requestUsersFromDb();
+      } else {
+        alert('삭제 실패: '+(msg.data.message||'UNKNOWN'));
+      }
+      return;
+    }
+
+    // ── 로그인 인증 결과 (DB 우선 인증) ─────────────────────
+    if(msg.type === 'authResult' && msg.data){
+      const data = msg.data;
+      if(!_loginPending) return;
+      if(data.reqId && String(data.reqId) !== String(_loginPending.reqId)) return;
+      if(data.userId && _loginPending.id && data.userId !== _loginPending.id) return;
+      if(_loginPending.timer) clearTimeout(_loginPending.timer);
+
+      if(data.ok){
+        const role = (data.role === 'worker') ? 'worker' : 'admin';
+        _finalizeLoginSuccess(role, data.userId || _loginPending.id);
+      } else {
+        _finalizeLoginFail();
+      }
+      _loginPending=null;
+      return;
+    }
+
     // ── DB 리포트 데이터 수신 → 리포트 재렌더 ───────────────
     if(msg.type === 'reportData' && msg.data){
       _dbReportCache = msg.data;
@@ -6961,6 +6941,66 @@ window.sendToCSharp = function(type, target, data){
     if(window.chrome && window.chrome.webview)
       window.chrome.webview.postMessage(msg);
   } catch(e){ console.error('[sendToCSharp]', e); }
+};
+
+// 구조화 명령 전송 (하위 호환 유지)
+// 사용 예:
+// sendStructuredCommand({target:'CUTTING', commandType:'CUTTING_JOB', payload:{jobId:'J-1001', length:1200}})
+window.sendStructuredCommand = function(req){
+  try{
+    if(!req) return;
+    const payload = req.payload == null
+      ? ''
+      : (typeof req.payload === 'string' ? req.payload : JSON.stringify(req.payload));
+    const msg = {
+      type: req.type || req.commandType || 'STATUS',
+      commandType: req.commandType || req.type || '',
+      target: req.target || req.targetMachineId || 'ALL',
+      correlationId: req.correlationId || '',
+      timestamp: req.timestamp || new Date().toISOString(),
+      data: payload
+    };
+    if(window.chrome && window.chrome.webview){
+      window.chrome.webview.postMessage(JSON.stringify(msg));
+    }
+  } catch(e){ console.error('[sendStructuredCommand]', e); }
+};
+
+// 단계별 샘플 명령 (내부 표준 프로토콜 테스트용)
+window.sendSampleCuttingJob = function(target='CUTTING'){
+  sendStructuredCommand({
+    target,
+    commandType:'CUTTING_JOB',
+    payload:{ jobId:'CUT-DEMO-001', pipeId:'P-1001', materialCode:'ST', lengthMm:1200, quantity:1, programId:'CUT-PGM-A' }
+  });
+};
+window.sendSampleLoaderJob = function(target='LOADER'){
+  sendStructuredCommand({
+    target,
+    commandType:'LOADER_JOB',
+    payload:{ jobId:'LOAD-DEMO-001', pipeId:'P-1001', sourceRack:'RACK-A', sourceSlot:'S-01', quantity:1, targetStage:'CUTTING', prefetch:true, bufferPrepare:true, sequenceNo:'1' }
+  });
+};
+window.sendSampleMarkingJob = function(target='LASER'){
+  sendStructuredCommand({
+    target,
+    commandType:'MARKING_JOB',
+    payload:{ jobId:'MARK-DEMO-001', pipeId:'P-1001', markText:'AFP-DEMO', barcode:'AFS-0001', templateId:'TMP-A' }
+  });
+};
+window.sendSampleRobotTransfer = function(target='ROBOT'){
+  sendStructuredCommand({
+    target,
+    commandType:'MOVE_TRANSFER',
+    payload:{ jobId:'TR-DEMO-001', pipeId:'P-1001', fromStage:'CUTTING', toStage:'BENDING', gripProfile:'STD-PIPE' }
+  });
+};
+window.sendSampleBendingJob = function(target='BENDING'){
+  sendStructuredCommand({
+    target,
+    commandType:'BENDING_JOB',
+    payload:{ jobId:'BEND-DEMO-001', pipeId:'P-1001', programId:'BEND-PGM-A', steps:[{seq:1,angleDeg:45,radiusMm:60,feedMm:350}] }
+  });
 };
 </script>
 <script src="./js/project-store.js"></script>

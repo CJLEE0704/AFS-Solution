@@ -29,6 +29,7 @@
     <Compile Include="App.xaml.cs" />
     <Compile Include="MainWindow.xaml.cs" />
     <Compile Include="Communication\CommunicationManager.cs" />
+    <Compile Include="Communication\MachineCommandModels.cs" />
     <Compile Include="Communication\MachineProtocol.cs" />
     <Compile Include="Communication\MachineProtocolAdapter.cs" />
     <Compile Include="Communication\MachineStatus.cs" />

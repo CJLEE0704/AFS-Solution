@@ -161,11 +161,6 @@ namespace PipeBendingDashboard.Communication
                 if (!await SendStringAsync(command, encoding)) return null;
                 var line = await ReceiveLineAsync(encoding);
                 if (line == null) return null;
-                if (!IsValidResponse(line))
-                {
-                    Log($"응답 형식 오류 — '{line}'");
-                    return null;
-                }
                 return line;
             }
             finally
@@ -230,21 +225,6 @@ namespace PipeBendingDashboard.Communication
             return null;
         }
 
-        private static bool IsValidResponse(string response)
-        {
-            if (string.IsNullOrWhiteSpace(response)) return false;
-            var upper = response.Trim().ToUpperInvariant();
-            return upper.StartsWith("OK")
-                || upper.StartsWith("ERROR")
-                || upper.StartsWith("NOT_READY")
-                || upper.Contains("STATUS")
-                || upper.Contains("RUNNING")
-                || upper.Contains("WORKING")
-                || upper.Contains("IDLE")
-                || upper.Contains("READY")
-                || upper.Contains("FINISH")
-                || upper.Contains("UNLOAD_COMPLETE")
-                || upper.Contains("ALARM");
-        }
+        // 프로토콜 의미 해석은 adapter/parser 계층에서 수행
     }
 }

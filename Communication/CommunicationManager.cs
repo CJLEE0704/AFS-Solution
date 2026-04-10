@@ -42,11 +42,15 @@ namespace PipeBendingDashboard.Communication
         private readonly SemaphoreSlim _cmdLock = new(1, 1);
         private readonly TimeSpan _readyRefreshInterval = TimeSpan.FromSeconds(1);
         private readonly IReadOnlyDictionary<string, IMachineProtocolAdapter> _protocolAdapters;
+        private LineTopology _topology = new(new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" });
+        private readonly Dictionary<string, string> _lastCorrelationByMachine = new(StringComparer.OrdinalIgnoreCase);
+        private bool _simulationMode = false;
 
         // ── 이벤트 ───────────────────────────────────────────────
         public event Action<string>?                     StatusUpdated;  // JSON
         public event Action<string, string>?             LogAdded;       // (machineId, msg)
         public event Action<string, string, string>?     CommandAck;     // (machineId, cmdType, response)
+        public event Action<MachineCommandResponse>?     CommandResponseReceived; // 구조화 응답
         /// <summary>Ready 확인 결과 이벤트 (machineId, isReady, response)</summary>
         public event Action<string, bool, string>?       ReadyChecked;
 
@@ -207,6 +211,7 @@ namespace PipeBendingDashboard.Communication
         {
             var newActive = new HashSet<string>(machineIds.Select(s => s.ToUpper()));
             _activeMachineIds = newActive;
+            _topology = new LineTopology(_activeMachineIds);
 
             // 비활성화된 머신 즉시 연결 해제
             foreach (var id in new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" })
@@ -227,6 +232,8 @@ namespace PipeBendingDashboard.Communication
             }
             NotifyStatusUpdate();
         }
+
+        public void SetSimulationMode(bool on) => _simulationMode = on;
 
         public async Task ConnectAllAsync()
         {
@@ -462,105 +469,156 @@ namespace PipeBendingDashboard.Communication
                 return;
             }
 
-            var adapter = _protocolAdapters.TryGetValue(cmd.Target, out var found) ? found : null;
-            var protocol = adapter?.ResolveCommand(cmd.Type);
+            if (!TryBuildCommandRequest(cmd, out var request, out var requestError))
+            {
+                CommandAck?.Invoke(cmd.Target, cmd.Type, requestError);
+                return;
+            }
 
-            if (protocol == null) return;
+            var adapter = _protocolAdapters.TryGetValue(request.TargetMachineId, out var found) ? found : null;
+            if (adapter == null)
+            {
+                CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:UNKNOWN_MACHINE");
+                return;
+            }
+            var protocol = adapter.EncodeRequest(request);
+            if (string.IsNullOrWhiteSpace(protocol))
+            {
+                CommandAck?.Invoke(request.TargetMachineId, request.CommandType.ToString().ToUpperInvariant(), "ERROR:UNSUPPORTED_COMMAND");
+                return;
+            }
 
             // ── 직렬화: 이전 명령 완료 후 다음 명령 처리 ──────────
             if (!await _cmdLock.WaitAsync(5000))
             {
                 var timeoutMsg = "이전 명령 대기 중 — 타임아웃";
-                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ {timeoutMsg}");
-                CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:TIMEOUT");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ {timeoutMsg}");
+                CommandAck?.Invoke(request.TargetMachineId, request.CommandType.ToString().ToUpperInvariant(), "ERROR:TIMEOUT");
                 return;
             }
 
             try
             {
-                var targetId = cmd.Target.ToUpperInvariant();
-                var cmdType  = cmd.Type.ToUpperInvariant();
+                var targetId = request.TargetMachineId.ToUpperInvariant();
+                var cmdType  = request.CommandType.ToString().ToUpperInvariant();
                 if (!_activeMachineIds.Contains(targetId))
                 {
-                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 비활성 머신");
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:INACTIVE_MACHINE");
+                    LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ 비활성 머신");
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:INACTIVE_MACHINE");
                     return;
                 }
 
-                var client = GetClient(cmd.Target);
+                var client = GetClient(request.TargetMachineId);
                 if (client == null || !client.IsConnected)
                 {
-                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 연결되지 않음");
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NOT_CONNECTED");
+                    LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ 연결되지 않음");
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:NOT_CONNECTED");
                     return;
                 }
 
-                var status = GetStatus(cmd.Target);
+                var status = GetStatus(request.TargetMachineId);
                 if (status == null)
                 {
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:UNKNOWN_MACHINE");
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:UNKNOWN_MACHINE");
                     return;
                 }
 
-                if ((cmdType == "START" || cmdType == "RESET") && !status.IsReady)
+                if (request.CommandType == MachineCommandType.Start && !status.IsReady)
                 {
-                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ READY 인터락 미충족");
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NOT_READY");
+                    LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ READY 인터락 미충족");
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:NOT_READY");
                     return;
                 }
 
-                var lineInterlockError = ValidateLineInterlock(targetId, cmdType);
+                var lineInterlockError = ValidateLineInterlock(request, status);
                 if (lineInterlockError != null)
                 {
-                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ 라인 인터락 거부: {lineInterlockError}");
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, lineInterlockError);
+                    LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ 라인 인터락 거부: {lineInterlockError}");
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, lineInterlockError);
                     return;
                 }
 
-                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] → 전송: {cmd.Type} ({protocol.Trim()})");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] → 전송: {cmdType} ({protocol.Trim()})");
 
                 // ── 명령 전송 + 장비 ACK 응답 수신 ─────────────────
                 var response = await client.SendReceiveStringAsync(protocol);
 
                 if (string.IsNullOrWhiteSpace(response))
                 {
-                    LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ✗ ACK 없음 (응답 타임아웃)");
-                    CommandAck?.Invoke(cmd.Target, cmd.Type, "ERROR:NO_ACK");
+                    LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ✗ ACK 없음 (응답 타임아웃)");
+                    var noAck = new MachineCommandResponse
+                    {
+                        MachineId = request.TargetMachineId,
+                        CommandType = request.CommandType,
+                        ResponseType = MachineResponseType.Error,
+                        IsSuccess = false,
+                        ErrorCode = "NO_ACK",
+                        CorrelationId = request.CorrelationId,
+                        RawResponse = ""
+                    };
+                    CommandResponseReceived?.Invoke(noAck);
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:NO_ACK");
                     return;
                 }
 
                 var ack = response.Trim();
-                LogAdded?.Invoke(cmd.Target, $"[{cmd.Target}] ← ACK: {ack}");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← ACK: {ack}");
+                var structured = adapter.DecodeResponse(request, ack);
+                if (!string.IsNullOrWhiteSpace(structured.CorrelationId)
+                    && !string.Equals(structured.CorrelationId, request.CorrelationId, StringComparison.OrdinalIgnoreCase))
+                {
+                    CommandAck?.Invoke(request.TargetMachineId, cmdType, "ERROR:STALE_RESPONSE");
+                    return;
+                }
+                _lastCorrelationByMachine[request.TargetMachineId] = request.CorrelationId;
+                CommandResponseReceived?.Invoke(structured);
 
                 // ── 상태 즉시 갱신 ───────────────────────────────────
                 status.LastMessage = ack;
-                bool isOk = ack.StartsWith("OK", StringComparison.OrdinalIgnoreCase);
-                if (cmdType == "START" && isOk)
-                {
-                    status.Status = "WORKING";
-                    status.StateCode = "BUSY";
-                }
-                else if (cmdType == "STOP" && isOk)
-                {
-                    status.Status = "READY";
-                    status.StateCode = "READY";
-                }
-                else if (cmdType == "RESET" && isOk)
-                {
-                    status.Status = "READY";
-                    status.StateCode = "READY";
-                    status.HasAlarm = false;
-                    status.ErrorCode = "";
-                }
-                if (ack.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase))
+                if (structured.ResponseType == MachineResponseType.Alarm
+                    || structured.ResponseType == MachineResponseType.Fault
+                    || structured.ResponseType == MachineResponseType.EmergencyStop
+                    || structured.ResponseType == MachineResponseType.Rejected
+                    || structured.ResponseType == MachineResponseType.Error)
                 {
                     status.HasAlarm = true;
                     status.Status = "FAULT";
                     status.StateCode = "FAULT";
+                    if (!string.IsNullOrWhiteSpace(structured.ErrorCode)) status.ErrorCode = structured.ErrorCode;
+                }
+
+                if (structured.IsSuccess)
+                {
+                    switch (request.CommandType)
+                    {
+                        case MachineCommandType.Start:
+                        case MachineCommandType.ExecuteJob:
+                        case MachineCommandType.CuttingJob:
+                        case MachineCommandType.MarkingJob:
+                        case MachineCommandType.BendingJob:
+                        case MachineCommandType.MoveTransfer:
+                            status.Status = "WORKING";
+                            status.StateCode = "BUSY";
+                            status.IsReady = false;
+                            break;
+                        case MachineCommandType.Stop:
+                        case MachineCommandType.Reset:
+                        case MachineCommandType.Abort:
+                            status.Status = "READY";
+                            status.StateCode = "READY";
+                            status.HasAlarm = false;
+                            status.ErrorCode = "";
+                            break;
+                        case MachineCommandType.Status:
+                        case MachineCommandType.Ready:
+                        case MachineCommandType.LoadJob:
+                        case MachineCommandType.Custom:
+                            break;
+                    }
                 }
 
                 // ── HTML에 ACK 결과 전달 → 다음 명령 허용 ──────────
-                CommandAck?.Invoke(cmd.Target, cmd.Type, ack);
+                CommandAck?.Invoke(request.TargetMachineId, cmdType, ack);
                 NotifyStatusUpdate();
             }
             finally
@@ -635,8 +693,8 @@ namespace PipeBendingDashboard.Communication
         private async Task HandleAllTargetAsync(WebCommand cmd)
         {
             var type = cmd.Type.ToUpperInvariant();
-            // 정책: ALL 대상은 STOP/STATUS만 허용 (START/RESET 금지)
-            if (type != "STOP" && type != "STATUS")
+            // 정책: ALL 대상은 STOP/STATUS/RESET/ABORT만 허용
+            if (type != "STOP" && type != "STATUS" && type != "RESET" && type != "ABORT")
             {
                 CommandAck?.Invoke("ALL", cmd.Type, "ERROR:ALL_NOT_ALLOWED");
                 return;
@@ -762,21 +820,46 @@ namespace PipeBendingDashboard.Communication
             if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
         }
 
-        private string? ValidateLineInterlock(string targetId, string cmdType)
+        private string? ValidateLineInterlock(MachineCommandRequest request, MachineStatus status)
         {
-            if (cmdType != "START") return null;
+            var targetId = request.TargetMachineId.ToUpperInvariant();
+            if (!_topology.IsActive(targetId)) return "ERROR:TOPOLOGY_INACTIVE_TARGET";
 
-            bool Ready(string id) => _activeMachineIds.Contains(id) && (GetStatus(id)?.StateCode == "READY");
-            return targetId switch
+            bool IsReady(string id)
+                => _topology.IsActive(id) && (GetStatus(id)?.StateCode == "READY");
+
+            bool needsRouteCheck = request.CommandType == MachineCommandType.Start
+                || request.CommandType == MachineCommandType.ExecuteJob
+                || LineTopology.IsMovementCommand(request.CommandType);
+            if (!needsRouteCheck) return null;
+
+            var upstream = _topology.GetUpstreamCandidates(targetId).FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(upstream) && !IsReady(upstream)) return "ERROR:UPSTREAM_NOT_READY";
+
+            if (request.CommandType == MachineCommandType.MoveTransfer)
             {
-                "CUTTING" when !Ready("LOADER") => "ERROR:UPSTREAM_NOT_READY",
-                "LASER" when !Ready("CUTTING") => "ERROR:UPSTREAM_NOT_READY",
-                "ROBOT" when !Ready("LASER") => "ERROR:UPSTREAM_NOT_READY",
-                "ROBOT" when !(Ready("BENDING") || Ready("BENDING2")) => "ERROR:NO_READY_DOWNSTREAM",
-                "BENDING" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
-                "BENDING2" when !Ready("ROBOT") => "ERROR:UPSTREAM_NOT_READY",
-                _ => null
-            };
+                var payloadTarget = request.Payload.Fields.TryGetValue("toStage", out var toStage)
+                    ? toStage?.ToUpperInvariant() ?? ""
+                    : "";
+                if (string.IsNullOrWhiteSpace(payloadTarget)) return "ERROR:MISSING_TRANSFER_TARGET";
+                if (!_topology.IsRouteValid(targetId, payloadTarget)) return "ERROR:INVALID_ROUTE";
+                if (!IsReady(payloadTarget)) return "ERROR:DOWNSTREAM_NOT_READY";
+            }
+
+            if (request.CommandType is MachineCommandType.LoaderJob or MachineCommandType.LoadRequest or MachineCommandType.PrefetchLoad or MachineCommandType.BufferPrepare)
+            {
+                var down = _topology.GetDownstreamCandidates("LOADER").FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(down)) return "ERROR:NO_ACTIVE_DOWNSTREAM";
+                if (!IsReady("LOADER")) return "ERROR:LOADER_NOT_READY";
+                if (!_simulationMode && !IsReady(down)) return "ERROR:DOWNSTREAM_NOT_READY";
+            }
+
+            if (!_simulationMode && LineTopology.IsMovementCommand(request.CommandType) && !status.IsReady)
+            {
+                return "ERROR:MOTION_PERMIT_NOT_READY";
+            }
+
+            return null;
         }
 
         public void Dispose()
@@ -789,6 +872,143 @@ namespace PipeBendingDashboard.Communication
             _robotClient.Dispose();
             _bendingClient.Dispose();
             _bending2Client.Dispose();
+        }
+
+        public Task SendLoaderJobAsync(string targetMachineId, LoaderJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "LOADER_JOB",
+                CommandType = "LOADER_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromLoader(payload).Raw
+            });
+
+        // ── 단계별 Payload 명령 전송 편의 메서드 (내부 모델 기반) ──
+        public Task SendCuttingJobAsync(string targetMachineId, CuttingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "CUTTING_JOB",
+                CommandType = "CUTTING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromCutting(payload).Raw
+            });
+
+        public Task SendMarkingJobAsync(string targetMachineId, MarkingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "MARKING_JOB",
+                CommandType = "MARKING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromMarking(payload).Raw
+            });
+
+        public Task SendRobotTransferAsync(string targetMachineId, RobotTransferPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "MOVE_TRANSFER",
+                CommandType = "MOVE_TRANSFER",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromRobotTransfer(payload).Raw
+            });
+
+        public Task SendBendingJobAsync(string targetMachineId, BendingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "BENDING_JOB",
+                CommandType = "BENDING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromBending(payload).Raw
+            });
+
+        private static bool TryBuildCommandRequest(WebCommand cmd, out MachineCommandRequest request, out string error)
+        {
+            request = new MachineCommandRequest();
+            error = "";
+            if (cmd == null)
+            {
+                error = "ERROR:INVALID_COMMAND";
+                return false;
+            }
+
+            var target = (cmd.Target ?? "").Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                error = "ERROR:TARGET_REQUIRED";
+                return false;
+            }
+
+            var rawType = string.IsNullOrWhiteSpace(cmd.CommandType) ? cmd.Type : cmd.CommandType;
+            if (!TryMapCommandType(rawType, out var mappedType))
+            {
+                error = "ERROR:UNKNOWN_COMMAND_TYPE";
+                return false;
+            }
+
+            request.TargetMachineId = target;
+            request.CommandType = mappedType;
+            request.CorrelationId = string.IsNullOrWhiteSpace(cmd.CorrelationId) ? Guid.NewGuid().ToString("N") : cmd.CorrelationId.Trim();
+            request.RequestedAtUtc = DateTime.TryParse(cmd.Timestamp, out var ts) ? ts.ToUniversalTime() : DateTime.UtcNow;
+            request.Payload = ParsePayload(cmd.Data);
+            return true;
+        }
+
+        private static MachineCommandPayload ParsePayload(string? raw)
+        {
+            var payload = new MachineCommandPayload { Raw = raw?.Trim() ?? "" };
+            if (string.IsNullOrWhiteSpace(payload.Raw)) return payload;
+            try
+            {
+                using var doc = JsonDocument.Parse(payload.Raw);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return payload;
+                foreach (var p in doc.RootElement.EnumerateObject())
+                {
+                    payload.Fields[p.Name] = p.Value.ToString();
+                }
+            }
+            catch
+            {
+                // legacy raw text payload 허용
+            }
+            return payload;
+        }
+
+        private static bool TryMapCommandType(string rawType, out MachineCommandType commandType)
+        {
+            commandType = MachineCommandType.Custom;
+            var key = (rawType ?? "").Trim().ToUpperInvariant();
+            switch (key)
+            {
+                case "START": commandType = MachineCommandType.Start; return true;
+                case "STOP": commandType = MachineCommandType.Stop; return true;
+                case "STATUS": commandType = MachineCommandType.Status; return true;
+                case "RESET": commandType = MachineCommandType.Reset; return true;
+                case "READY": case "READY?": commandType = MachineCommandType.Ready; return true;
+                case "LOADER_JOB": commandType = MachineCommandType.LoaderJob; return true;
+                case "LOAD_REQUEST": commandType = MachineCommandType.LoadRequest; return true;
+                case "PREFETCH_LOAD": commandType = MachineCommandType.PrefetchLoad; return true;
+                case "BUFFER_PREPARE": commandType = MachineCommandType.BufferPrepare; return true;
+                case "LOAD_JOB": case "JOB_LOAD": commandType = MachineCommandType.LoadJob; return true;
+                case "EXECUTE_JOB": case "JOB_EXEC": commandType = MachineCommandType.ExecuteJob; return true;
+                case "CUTTING_JOB": case "CUT_JOB": commandType = MachineCommandType.CuttingJob; return true;
+                case "MARKING_JOB": case "MARK_JOB": commandType = MachineCommandType.MarkingJob; return true;
+                case "BENDING_JOB": case "BEND_JOB": commandType = MachineCommandType.BendingJob; return true;
+                case "MOVE_TRANSFER": case "MOVE": commandType = MachineCommandType.MoveTransfer; return true;
+                case "ABORT": commandType = MachineCommandType.Abort; return true;
+                default:
+                    if (string.IsNullOrWhiteSpace(key)) return false;
+                    commandType = MachineCommandType.Custom;
+                    return true;
+            }
         }
     }
 }

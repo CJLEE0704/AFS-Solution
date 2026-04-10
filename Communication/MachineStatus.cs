@@ -49,5 +49,8 @@ namespace PipeBendingDashboard.Communication
         public string Type   { get; set; } = "";  // START / STOP / STATUS / RESET
         public string Target { get; set; } = "";  // LOADER / CUTTING / LASER / ROBOT / BENDING / BENDING2
         public string Data   { get; set; } = "";  // 추가 데이터 (옵션)
+        public string CommandType { get; set; } = "";   // 구조화 명령 타입 (옵션)
+        public string CorrelationId { get; set; } = ""; // 추적 ID (옵션)
+        public string Timestamp { get; set; } = "";     // ISO-8601 UTC (옵션)
     }
 }

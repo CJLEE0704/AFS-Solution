@@ -411,11 +411,20 @@ namespace PipeBendingDashboard.Database
             if (!_isAvailable) return (false, "DB_UNAVAILABLE");
             try
             {
+                userId = (userId ?? "").Trim();
+                userName = (userName ?? "").Trim();
+                password = password ?? "";
+                role = ((role ?? "").Trim().ToLowerInvariant() == "admin") ? "admin" : "worker";
+
+                if (string.IsNullOrWhiteSpace(userId)) return (false, "USER_ID_REQUIRED");
+                if (string.IsNullOrWhiteSpace(userName)) userName = userId;
+
                 await using var db = CreateContext();
                 var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
                 var now = DateTime.Now;
                 if (user == null)
                 {
+                    if (string.IsNullOrWhiteSpace(password)) return (false, "PASSWORD_REQUIRED");
                     db.Users.Add(new UserEntity
                     {
                         UserId = userId,

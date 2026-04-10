@@ -6209,7 +6209,8 @@ let _dbUsers = [];
 let userEditIdx = null;
 
 function requestUsersFromDb(){
-  window.sendToCSharp?.('REQUEST_USERS','ALL','');
+  if(userRole!=='admin') return;
+  window.sendToCSharp?.('REQUEST_USERS','ADMIN', JSON.stringify({actorRole:userRole}));
 }
 
 function renderUserList(){
@@ -6256,6 +6257,7 @@ function editUser(idx){
 function cancelUser(){ document.getElementById('userForm').style.display='none'; userEditIdx=null; }
 function togglePwVisible(){ const el=document.getElementById('uPw'); el.type=el.type==='password'?'text':'password'; }
 function saveUser(){
+  if(userRole!=='admin') return;
   const id=document.getElementById('uId').value.trim();
   const name=document.getElementById('uName').value.trim()||id;
   const pw=document.getElementById('uPw').value.trim();
@@ -6263,12 +6265,13 @@ function saveUser(){
   const errEl=document.getElementById('userFormErr');
   if(!id){errEl.style.display='block';errEl.textContent='아이디를 입력하세요';return;}
   if(userEditIdx===null && !pw){errEl.style.display='block';errEl.textContent='신규 계정은 비밀번호가 필요합니다';return;}
-  window.sendToCSharp?.('UPSERT_USER','AUTH', JSON.stringify({id,name,pw,role}));
+  window.sendToCSharp?.('UPSERT_USER','ADMIN', JSON.stringify({id,name,pw,role,actorRole:userRole}));
 }
 function deleteUser(idx){
+  if(userRole!=='admin') return;
   const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
   if(!confirm(`"${u.name||u.id}" (${u.id}) 계정을 비활성화하시겠습니까?`)) return;
-  window.sendToCSharp?.('DELETE_USER','AUTH', JSON.stringify({id:u.id}));
+  window.sendToCSharp?.('DELETE_USER','ADMIN', JSON.stringify({id:u.id,actorRole:userRole}));
 }
 function openAddUser(){}
 function editUser(idx){}

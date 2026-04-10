@@ -384,18 +384,33 @@ namespace PipeBendingDashboard
 
                 if (cmd.Type.ToUpper() == "REQUEST_USERS")
                 {
+                    if (!IsAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedAsync("REQUEST_USERS");
+                        return;
+                    }
                     await HandleRequestUsersAsync();
                     return;
                 }
 
                 if (cmd.Type.ToUpper() == "UPSERT_USER" && !string.IsNullOrEmpty(cmd.Data))
                 {
+                    if (!IsAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedAsync("UPSERT_USER");
+                        return;
+                    }
                     await HandleUpsertUserAsync(cmd.Data);
                     return;
                 }
 
                 if (cmd.Type.ToUpper() == "DELETE_USER" && !string.IsNullOrEmpty(cmd.Data))
                 {
+                    if (!IsAdminUserMgmtCommand(cmd))
+                    {
+                        await SendUserMgmtDeniedAsync("DELETE_USER");
+                        return;
+                    }
                     await HandleDeleteUserAsync(cmd.Data);
                     return;
                 }
@@ -791,6 +806,33 @@ namespace PipeBendingDashboard
                     data = new { ok = false, message = ex.Message }
                 })));
             }
+        }
+
+        private static bool IsAdminUserMgmtCommand(WebCommand cmd)
+        {
+            if (cmd == null) return false;
+            if (!string.Equals(cmd.Target, "ADMIN", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(cmd.Data)) return false;
+                var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
+                var actorRole = d.TryGetProperty("actorRole", out var rv) ? rv.GetString() ?? "" : "";
+                return string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private Task SendUserMgmtDeniedAsync(string action)
+        {
+            Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
+            {
+                type = "userSaved",
+                data = new { ok = false, message = $"{action}:FORBIDDEN_ADMIN_ONLY" }
+            })));
+            return Task.CompletedTask;
         }
 
         // ── 활성 머신 목록 변경 처리 ─────────────────────────────

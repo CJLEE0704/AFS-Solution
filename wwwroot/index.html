@@ -1987,8 +1987,12 @@ function setMenu(id){
     requestAnimationFrame(()=>{
       drawWeekly();
       renderDashProjectStats();
-      // 대시보드 돌아올 때 자동 애니메이션 재시작
-      if(!dashAutoRunning) setTimeout(()=>startDashAuto(), 400);
+      // 대시보드 자동 애니메이션은 시뮬레이션 모드에서만 동작
+      if(simModeOn){
+        if(!dashAutoRunning) setTimeout(()=>startDashAuto(), 400);
+      } else {
+        stopDashAuto();
+      }
     });
   } else if(id==='operation'){
     document.getElementById('op-page').classList.add('show');
@@ -2410,6 +2414,10 @@ function getDashCycleSteps(machines){
 }
 function dashAutoLoop(){
   if(!dashAutoRunning) return;
+  if(!simModeOn){
+    stopDashAuto();
+    return;
+  }
   const cfg=getActiveConfig();
   const steps=getDashCycleSteps(cfg.machines);
   const stepIdx=dashAutoStep % steps.length;
@@ -5522,7 +5530,11 @@ function toggleSimMode(on){
     });
     applyConfigToComm(); // 구성 반영 + 시뮬 타이머 시작
     clog('SYS','SIM','시뮬레이션 모드 ON — 실제 TCP 연결 없이 테스트','#6FB6C9');
+    if(activeMenu==='dashboard'){
+      if(!dashAutoRunning) setTimeout(()=>startDashAuto(), 0);
+    }
   } else {
+    stopDashAuto();
     stopSim();
     // 실제 통신 모드: machSt 연결 상태 초기화 (C# 폴링이 갱신)
     MACHINES.forEach(m=>{

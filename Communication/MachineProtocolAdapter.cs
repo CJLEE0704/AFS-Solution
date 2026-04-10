@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Text.Json;
 
 namespace PipeBendingDashboard.Communication
 {
@@ -9,6 +11,8 @@ namespace PipeBendingDashboard.Communication
         string? GetReadyCommand();
         string GetStatusCommand();
         string? ResolveCommand(string commandType);
+        string? EncodeRequest(MachineCommandRequest request);
+        MachineCommandResponse DecodeResponse(MachineCommandRequest request, string response);
         ParsedMachineStatus ParseStatus(string response);
         MachineRunState ParseRunState(string response);
     }
@@ -25,18 +29,65 @@ namespace PipeBendingDashboard.Communication
     public sealed class DefaultMachineProtocolAdapter : IMachineProtocolAdapter
     {
         private readonly Dictionary<string, string> _commands;
+        private readonly string _wirePrefix;
         public string MachineId { get; }
 
         public DefaultMachineProtocolAdapter(string machineId, Dictionary<string, string> commands)
         {
             MachineId = machineId;
             _commands = commands;
+            _wirePrefix = commands.TryGetValue("STATUS", out var st) && st.Contains(':')
+                ? st[..st.IndexOf(':')]
+                : machineId;
         }
 
         public string? GetReadyCommand() => _commands.TryGetValue("READY", out var cmd) ? cmd : null;
         public string GetStatusCommand() => _commands.TryGetValue("STATUS", out var cmd) ? cmd : string.Empty;
         public string? ResolveCommand(string commandType) => _commands.TryGetValue(commandType.ToUpperInvariant(), out var cmd) ? cmd : null;
         public ParsedMachineStatus ParseStatus(string response) => MachineProtocol.ParseStatusResponse(response);
+        public string? EncodeRequest(MachineCommandRequest request)
+        {
+            var key = request.CommandType.ToString().ToUpperInvariant();
+            var legacy = ResolveCommand(key);
+            if (!string.IsNullOrWhiteSpace(legacy)) return legacy;
+
+            return request.CommandType switch
+            {
+                MachineCommandType.LoadJob      => BuildInternalFrame("JOB_LOAD", request),
+                MachineCommandType.ExecuteJob   => BuildInternalFrame("JOB_EXEC", request),
+                MachineCommandType.CuttingJob   => BuildInternalFrame("CUTTING_JOB", request),
+                MachineCommandType.MarkingJob   => BuildInternalFrame("MARKING_JOB", request),
+                MachineCommandType.BendingJob   => BuildInternalFrame("BENDING_JOB", request),
+                MachineCommandType.MoveTransfer => BuildInternalFrame("ROBOT_TRANSFER", request),
+                MachineCommandType.Abort        => BuildInternalFrame("ABORT", request),
+                MachineCommandType.Custom       => BuildInternalFrame("CUSTOM", request),
+                _ => null
+            };
+        }
+
+        public MachineCommandResponse DecodeResponse(MachineCommandRequest request, string response)
+            => MachineProtocol.ParseCommandResponse(MachineId, request.CommandType, response, request.CorrelationId);
+
+        private string? BuildInternalFrame(string commandCode, MachineCommandRequest request)
+        {
+            var payloadRaw = request.Payload?.Raw?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(payloadRaw) && request.Payload?.Fields?.Count > 0)
+            {
+                payloadRaw = JsonSerializer.Serialize(request.Payload.Fields);
+            }
+
+            // 내부 표준 프레임 (벤더 중립, 사전 검증/시뮬 용도)
+            // <PREFIX>:CMD=<CODE>;CID=<ID>;TS=<UTC>;PAYLOAD=<BASE64(JSON)>
+            var payloadB64 = string.IsNullOrWhiteSpace(payloadRaw)
+                ? ""
+                : Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadRaw));
+            var frame = $"{_wirePrefix}:CMD={commandCode};CID={request.CorrelationId};TS={request.RequestedAtUtc:O}";
+            if (!string.IsNullOrWhiteSpace(payloadB64))
+            {
+                frame += $";PAYLOAD={payloadB64}";
+            }
+            return frame + "\r\n";
+        }
 
         public MachineRunState ParseRunState(string response)
         {

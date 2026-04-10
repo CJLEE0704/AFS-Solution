@@ -386,34 +386,34 @@ namespace PipeBendingDashboard
 
                 if (cmd.Type.ToUpper() == "REQUEST_USERS")
                 {
-                    if (!IsAdminUserMgmtCommand(cmd))
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
                     {
-                        await SendUserMgmtDeniedAsync("REQUEST_USERS");
+                        await SendUserMgmtDeniedResponseAsync("REQUEST_USERS");
                         return;
                     }
-                    await HandleRequestUsersAsync();
+                    await HandleRequestUsersFromDbAsync();
                     return;
                 }
 
                 if (cmd.Type.ToUpper() == "UPSERT_USER" && !string.IsNullOrEmpty(cmd.Data))
                 {
-                    if (!IsAdminUserMgmtCommand(cmd))
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
                     {
-                        await SendUserMgmtDeniedAsync("UPSERT_USER");
+                        await SendUserMgmtDeniedResponseAsync("UPSERT_USER");
                         return;
                     }
-                    await HandleUpsertUserAsync(cmd.Data);
+                    await HandleUpsertUserToDbAsync(cmd.Data);
                     return;
                 }
 
                 if (cmd.Type.ToUpper() == "DELETE_USER" && !string.IsNullOrEmpty(cmd.Data))
                 {
-                    if (!IsAdminUserMgmtCommand(cmd))
+                    if (!IsAuthorizedAdminUserMgmtCommand(cmd))
                     {
-                        await SendUserMgmtDeniedAsync("DELETE_USER");
+                        await SendUserMgmtDeniedResponseAsync("DELETE_USER");
                         return;
                     }
-                    await HandleDeleteUserAsync(cmd.Data);
+                    await HandleDeactivateUserInDbAsync(cmd.Data);
                     return;
                 }
 
@@ -732,7 +732,7 @@ namespace PipeBendingDashboard
             }
         }
 
-        private async Task HandleRequestUsersAsync()
+        private async Task HandleRequestUsersFromDbAsync()
         {
             if (_db == null || !_db.IsAvailable)
             {
@@ -751,7 +751,7 @@ namespace PipeBendingDashboard
             })));
         }
 
-        private async Task HandleUpsertUserAsync(string dataJson)
+        private async Task HandleUpsertUserToDbAsync(string dataJson)
         {
             try
             {
@@ -786,7 +786,7 @@ namespace PipeBendingDashboard
             }
         }
 
-        private async Task HandleDeleteUserAsync(string dataJson)
+        private async Task HandleDeactivateUserInDbAsync(string dataJson)
         {
             try
             {
@@ -818,7 +818,7 @@ namespace PipeBendingDashboard
             }
         }
 
-        private bool IsAdminUserMgmtCommand(WebCommand cmd)
+        private bool IsAuthorizedAdminUserMgmtCommand(WebCommand cmd)
         {
             if (cmd == null) return false;
             if (!string.Equals(cmd.Target, "ADMIN", StringComparison.OrdinalIgnoreCase)) return false;
@@ -836,7 +836,7 @@ namespace PipeBendingDashboard
             }
         }
 
-        private Task SendUserMgmtDeniedAsync(string action)
+        private Task SendUserMgmtDeniedResponseAsync(string action)
         {
             Dispatcher.Invoke(() =>
             {
@@ -861,119 +861,6 @@ namespace PipeBendingDashboard
                     data = new { ok = false, message = $"{action}:FORBIDDEN_ADMIN_ONLY" }
                 }));
             });
-            return Task.CompletedTask;
-        }
-
-        private async Task HandleRequestUsersAsync()
-        {
-            if (_db == null || !_db.IsAvailable)
-            {
-                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                {
-                    type = "usersData",
-                    data = Array.Empty<object>()
-                })));
-                return;
-            }
-            var users = await _db.GetUsersAsync();
-            Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-            {
-                type = "usersData",
-                data = users
-            })));
-        }
-
-        private async Task HandleUpsertUserAsync(string dataJson)
-        {
-            try
-            {
-                if (_db == null || !_db.IsAvailable)
-                {
-                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                    {
-                        type = "userSaved",
-                        data = new { ok = false, message = "DB_UNAVAILABLE" }
-                    })));
-                    return;
-                }
-                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
-                var userId = d.GetProperty("id").GetString() ?? "";
-                var userName = d.TryGetProperty("name", out var nv) ? nv.GetString() ?? userId : userId;
-                var pw = d.TryGetProperty("pw", out var pv) ? pv.GetString() ?? "" : "";
-                var role = d.TryGetProperty("role", out var rv) ? rv.GetString() ?? "worker" : "worker";
-                var res = await _db.UpsertUserAsync(userId, userName, pw, role);
-                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                {
-                    type = "userSaved",
-                    data = new { ok = res.ok, message = res.message, id = userId }
-                })));
-            }
-            catch (Exception ex)
-            {
-                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                {
-                    type = "userSaved",
-                    data = new { ok = false, message = ex.Message }
-                })));
-            }
-        }
-
-        private async Task HandleDeleteUserAsync(string dataJson)
-        {
-            try
-            {
-                if (_db == null || !_db.IsAvailable)
-                {
-                    Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                    {
-                        type = "userDeleted",
-                        data = new { ok = false, message = "DB_UNAVAILABLE" }
-                    })));
-                    return;
-                }
-                var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
-                var userId = d.GetProperty("id").GetString() ?? "";
-                var res = await _db.DeactivateUserAsync(userId);
-                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                {
-                    type = "userDeleted",
-                    data = new { ok = res.ok, message = res.message, id = userId }
-                })));
-            }
-            catch (Exception ex)
-            {
-                Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-                {
-                    type = "userDeleted",
-                    data = new { ok = false, message = ex.Message }
-                })));
-            }
-        }
-
-        private static bool IsAdminUserMgmtCommand(WebCommand cmd)
-        {
-            if (cmd == null) return false;
-            if (!string.Equals(cmd.Target, "ADMIN", StringComparison.OrdinalIgnoreCase)) return false;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(cmd.Data)) return false;
-                var d = JsonSerializer.Deserialize<JsonElement>(cmd.Data);
-                var actorRole = d.TryGetProperty("actorRole", out var rv) ? (rv.GetString() ?? "").Trim() : "";
-                return string.Equals(actorRole, "admin", StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private Task SendUserMgmtDeniedAsync(string action)
-        {
-            Dispatcher.Invoke(() => SendToWebView(JsonSerializer.Serialize(new
-            {
-                type = "userSaved",
-                data = new { ok = false, message = $"{action}:FORBIDDEN_ADMIN_ONLY" }
-            })));
             return Task.CompletedTask;
         }
 

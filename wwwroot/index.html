@@ -1723,6 +1723,51 @@ function setRole(role){
   document.getElementById('loginPw').focus();
 }
 const ACCOUNTS={admin:{id:'admin',pw:'admin'},worker:{id:'worker',pw:'worker'}};
+let _loginPending=null; // { id, pw, reqId, timer }
+let _loginReqSeq=0;
+
+function _findLocalAccount(id,pw){
+  const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
+  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
+  if(!found){
+    const legacy = [
+      {id:'admin', pw:'admin', role:'admin'},
+      {id:'iaan',  pw:'iaan',  role:'admin'},
+      {id:'worker',pw:'worker',role:'worker'}
+    ];
+    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
+  }
+  return found;
+}
+
+function _finalizeLoginSuccess(role,userId){
+  userRole=role;
+  currentUserId=userId;
+  const err=document.getElementById('loginErr');
+  if(err) err.classList.remove('show');
+  const ls=document.getElementById('loginScreen');
+  ls.style.transition='opacity .4s';ls.style.opacity='0';
+  setTimeout(()=>{
+    ls.style.display='none';
+    document.getElementById('sidebar').style.display='flex';
+    const menuBtn = document.getElementById('sidebar-menu-btn');
+    if(menuBtn) menuBtn.style.display = (userRole==='worker') ? 'none' : 'flex';
+    document.getElementById('main').style.display='flex';
+    afterLogin();
+  },400);
+}
+
+function _finalizeLoginFail(){
+  const err=document.getElementById('loginErr');
+  err.classList.add('show');
+  ['loginId','loginPw'].forEach(eid=>{
+    const el=document.getElementById(eid);
+    el.classList.add('err');
+    el.style.animation='none';requestAnimationFrame(()=>{el.style.animation='shake .4s';});
+    setTimeout(()=>el.classList.remove('err'),1200);
+  });
+  document.getElementById('loginPw').value='';
+}
 function syncHostWindowChrome(){
   try{
     let mode='normal';
@@ -1747,45 +1792,31 @@ function syncHostWindowChrome(){
 function doLogin(){
   const id=document.getElementById('loginId').value.trim();
   const pw=document.getElementById('loginPw').value.trim();
-  const err=document.getElementById('loginErr');
-  // 로컬 사용자 목록도 포함해서 인증
-  const allUsers=loadUsers?loadUsers():Object.entries(ACCOUNTS).map(([k,v])=>({...v,role:k}));
-  let found=allUsers.find(u=>u.id===id&&u.pw===pw);
-  if(!found){
-    // 레거시/초기 계정 fallback
-    const legacy = [
-      {id:'admin', pw:'admin', role:'admin'},
-      {id:'iaan',  pw:'iaan',  role:'admin'},
-      {id:'worker',pw:'worker',role:'worker'}
-    ];
-    found = legacy.find(u=>u.id===id&&u.pw===pw) || null;
+  if(!id || !pw){
+    _finalizeLoginFail();
+    return;
   }
-  const acc=found?[found.role,{id:found.id,pw:found.pw}]:null;
-  if(acc){
-    userRole=acc[0];
-    currentUserId=acc[1].id;  // ← 로그인 사용자 ID 저장
-    err.classList.remove('show');
-    const ls=document.getElementById('loginScreen');
-    ls.style.transition='opacity .4s';ls.style.opacity='0';
-    setTimeout(()=>{
-      ls.style.display='none';
-      document.getElementById('sidebar').style.display='flex';
-    // Worker는 사이드바 토글 버튼 숨김
-    const menuBtn = document.getElementById('sidebar-menu-btn');
-    if(menuBtn) menuBtn.style.display = (userRole==='worker') ? 'none' : 'flex';
-      document.getElementById('main').style.display='flex';
-      afterLogin();
-    },400);
-  } else {
-    err.classList.add('show');
-    ['loginId','loginPw'].forEach(eid=>{
-      const el=document.getElementById(eid);
-      el.classList.add('err');
-      el.style.animation='none';requestAnimationFrame(()=>{el.style.animation='shake .4s';});
-      setTimeout(()=>el.classList.remove('err'),1200);
-    });
-    document.getElementById('loginPw').value='';
+
+  // DB 우선 인증 (WebView2 환경), 실패/타임아웃 시 로컬 fallback
+  if(window.chrome?.webview){
+    const reqId = (++_loginReqSeq);
+    if(_loginPending?.timer) clearTimeout(_loginPending.timer);
+    _loginPending = { id, pw, reqId, timer: null };
+    window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
+    _loginPending.timer = setTimeout(()=>{
+      if(!_loginPending || _loginPending.reqId!==reqId) return;
+      const local=_findLocalAccount(id,pw);
+      if(local) _finalizeLoginSuccess(local.role, local.id);
+      else _finalizeLoginFail();
+      _loginPending=null;
+    }, 2500);
+    return;
   }
+
+  // 브라우저 단독 실행: 로컬 인증
+  const local=_findLocalAccount(id,pw);
+  if(local) _finalizeLoginSuccess(local.role, local.id);
+  else _finalizeLoginFail();
 }
 
 function afterLogin(){
@@ -6901,6 +6932,25 @@ window.onCSharpMessage = function(msg){
         ok ? '✅ MariaDB 연결 성공 — 생산 데이터 저장 활성화'
            : '⚠ MariaDB 연결 실패 — 오프라인 모드로 동작',
         ok ? 'var(--green)' : 'var(--yellow)');
+    }
+
+    // ── 로그인 인증 결과 (DB 우선 인증) ─────────────────────
+    if(msg.type === 'authResult' && msg.data){
+      const data = msg.data;
+      if(!_loginPending) return;
+      if(data.userId && _loginPending.id && data.userId !== _loginPending.id) return;
+      if(_loginPending.timer) clearTimeout(_loginPending.timer);
+
+      if(data.ok){
+        const role = (data.role === 'worker') ? 'worker' : 'admin';
+        _finalizeLoginSuccess(role, data.userId || _loginPending.id);
+      } else {
+        const local=_findLocalAccount(_loginPending.id, _loginPending.pw);
+        if(local) _finalizeLoginSuccess(local.role, local.id);
+        else _finalizeLoginFail();
+      }
+      _loginPending=null;
+      return;
     }
 
     // ── DB 리포트 데이터 수신 → 리포트 재렌더 ───────────────

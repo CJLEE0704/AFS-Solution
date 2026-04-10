@@ -1702,15 +1702,30 @@ function applyRoleDensity(role){
   if(document.body) document.body.setAttribute('data-role', next);
 }
 
+function normalizeRole(role){
+  const r = String(role ?? '').trim().toLowerCase();
+  return r === 'admin' ? 'admin' : 'worker';
+}
+
+function setRuntimeRole(role){
+  userRole = normalizeRole(role);
+  window.__runtimeUserRole = userRole;
+  applyRoleDensity(userRole);
+  return userRole;
+}
+
+function getRuntimeRole(){
+  return normalizeRole(window.__runtimeUserRole || userRole);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 3. LOGIN
 // ═══════════════════════════════════════════════════════════════
 // 로그인 역할 선택
 function setRole(role){
-  userRole=role;
-  applyRoleDensity(role);
+  setRuntimeRole(role);
   const ab=document.getElementById('roleAdminBtn'),wb=document.getElementById('roleWorkerBtn');
-  if(role==='admin'){
+  if(getRuntimeRole()==='admin'){
     ab.style.cssText+=';border-color:var(--cyan);background:var(--cg);color:var(--cyan)';
     wb.style.cssText+=';border-color:var(--border);background:transparent;color:var(--dim)';
   } else {
@@ -1724,7 +1739,7 @@ let _loginPending=null; // { id, pw, reqId, timer }
 let _loginReqSeq=0;
 
 function _finalizeLoginSuccess(role,userId){
-  userRole=role;
+  setRuntimeRole(role);
   currentUserId=userId;
   const err=document.getElementById('loginErr');
   if(err) err.classList.remove('show');
@@ -1734,7 +1749,7 @@ function _finalizeLoginSuccess(role,userId){
     ls.style.display='none';
     document.getElementById('sidebar').style.display='flex';
     const menuBtn = document.getElementById('sidebar-menu-btn');
-    if(menuBtn) menuBtn.style.display = (userRole==='worker') ? 'none' : 'flex';
+    if(menuBtn) menuBtn.style.display = (getRuntimeRole()==='worker') ? 'none' : 'flex';
     document.getElementById('main').style.display='flex';
     afterLogin();
   },400);
@@ -1801,7 +1816,7 @@ function doLogin(){
 }
 
 function afterLogin(){
-  if(userRole==='worker') afterLoginWorker();
+  if(getRuntimeRole()==='worker') afterLoginWorker();
   else afterLoginAdmin();
 }
 
@@ -1889,8 +1904,9 @@ function switchToAdmin(){
 function initNav(){
   const nav=document.getElementById('nav'); if(!nav) return;
   nav.innerHTML='';
-  const menus = userRole==='admin' ? ADMIN_MENUS : WORKER_MENUS;
-  const defMenu = userRole==='admin' ? 'dashboard' : 'operation';
+  const role = getRuntimeRole();
+  const menus = role==='admin' ? ADMIN_MENUS : WORKER_MENUS;
+  const defMenu = role==='admin' ? 'dashboard' : 'operation';
   if(!menus.find(m=>m.id===activeMenu)) activeMenu=defMenu;
   menus.forEach(m=>{
     const el=document.createElement('div');
@@ -1917,8 +1933,8 @@ function initNav(){
   const footer=document.createElement('div');
   footer.id='nav-footer';
   footer.style.cssText='padding:8px 6px 6px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px';
-  const roleCol=userRole==='admin'?'var(--cyan)':'#6FB58A';
-  const roleLabel=userRole==='admin'?'👔 Admin':'🔧 Worker';
+  const roleCol=role==='admin'?'var(--cyan)':'#6FB58A';
+  const roleLabel=role==='admin'?'👔 Admin':'🔧 Worker';
   footer.innerHTML=`
     <div style="padding:4px 8px;border-radius:5px;background:${roleCol}18;border:1px solid ${roleCol}44;
                 text-align:center;font-size:8.5px;font-weight:700;color:${roleCol}">${roleLabel}</div>
@@ -1979,10 +1995,10 @@ function setMenu(id){
   PAGE_IDS.forEach(p=>document.getElementById(p).classList.remove('show'));
   // 대시보드: 아이콘 전용 / 나머지: 전체 표시 (Worker는 항상 전체 표시)
   const sidebar=document.getElementById('sidebar');
-  if(sidebar && userRole==='worker'){
+  if(sidebar && getRuntimeRole()==='worker'){
     sidebar.classList.remove('sidebar-icon','sidebar-expanded');
     sidebar.style.display='flex';
-  } else if(sidebar && userRole!=='worker'){
+  } else if(sidebar && getRuntimeRole()!=='worker'){
     if(id==='dashboard'){
       sidebar.classList.add('sidebar-icon');
       sidebar.classList.remove('sidebar-expanded');
@@ -6188,7 +6204,8 @@ function initSettingsPage(){
   const userSection = document.getElementById('userMgmtPanel');
   const settGrid = document.getElementById('settGrid');
 
-  if(userRole==='admin'){
+  const role = getRuntimeRole();
+  if(role==='admin'){
     if(sub) sub.textContent='DB 사용자 관리';
     if(cfgSection){ cfgSection.style.display='none'; }
     if(userSection){ userSection.style.display='flex'; userSection.style.flex='1'; }
@@ -6209,7 +6226,9 @@ let _dbUsers = [];
 let userEditIdx = null;
 
 function requestUsersFromDb(){
-  window.sendToCSharp?.('REQUEST_USERS','ALL','');
+  const role = getRuntimeRole();
+  if(role!=='admin') return;
+  window.sendToCSharp?.('REQUEST_USERS','ADMIN', JSON.stringify({actorRole:role}));
 }
 
 function renderUserList(){
@@ -6256,6 +6275,8 @@ function editUser(idx){
 function cancelUser(){ document.getElementById('userForm').style.display='none'; userEditIdx=null; }
 function togglePwVisible(){ const el=document.getElementById('uPw'); el.type=el.type==='password'?'text':'password'; }
 function saveUser(){
+  const runtimeRole = getRuntimeRole();
+  if(runtimeRole!=='admin') return;
   const id=document.getElementById('uId').value.trim();
   const name=document.getElementById('uName').value.trim()||id;
   const pw=document.getElementById('uPw').value.trim();
@@ -6263,12 +6284,14 @@ function saveUser(){
   const errEl=document.getElementById('userFormErr');
   if(!id){errEl.style.display='block';errEl.textContent='아이디를 입력하세요';return;}
   if(userEditIdx===null && !pw){errEl.style.display='block';errEl.textContent='신규 계정은 비밀번호가 필요합니다';return;}
-  window.sendToCSharp?.('UPSERT_USER','AUTH', JSON.stringify({id,name,pw,role}));
+  window.sendToCSharp?.('UPSERT_USER','ADMIN', JSON.stringify({id,name,pw,role,actorRole:runtimeRole}));
 }
 function deleteUser(idx){
+  const runtimeRole = getRuntimeRole();
+  if(runtimeRole!=='admin') return;
   const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
   if(!confirm(`"${u.name||u.id}" (${u.id}) 계정을 비활성화하시겠습니까?`)) return;
-  window.sendToCSharp?.('DELETE_USER','AUTH', JSON.stringify({id:u.id}));
+  window.sendToCSharp?.('DELETE_USER','ADMIN', JSON.stringify({id:u.id,actorRole:runtimeRole}));
 }
 function openAddUser(){}
 function editUser(idx){}
@@ -6861,7 +6884,7 @@ window.onCSharpMessage = function(msg){
       if(_loginPending.timer) clearTimeout(_loginPending.timer);
 
       if(data.ok){
-        const role = (data.role === 'worker') ? 'worker' : 'admin';
+        const role = normalizeRole(data.role);
         _finalizeLoginSuccess(role, data.userId || _loginPending.id);
       } else {
         _finalizeLoginFail();

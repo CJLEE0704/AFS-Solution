@@ -38,7 +38,9 @@
     const reqId = Date.now().toString(36) + Math.random().toString(36).slice(2,7);
     const res = await dbLogin(id,pw,reqId);
     if(res.ok){
-      const role = (res.role === 'worker') ? 'worker' : 'admin';
+      const role = (typeof global.normalizeRole === 'function')
+        ? global.normalizeRole(res.role)
+        : ((String(res.role ?? '').trim().toLowerCase() === 'admin') ? 'admin' : 'worker');
       if (typeof global._finalizeLoginSuccess === 'function') {
         global._finalizeLoginSuccess(role, res.userId || id);
       } else {

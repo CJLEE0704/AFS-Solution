@@ -360,13 +360,21 @@ namespace PipeBendingDashboard.Database
         public async Task<(bool ok, string role, string userName)> AuthenticateAsync(string userId, string password)
         {
             if (!_isAvailable) return (false, "", "");
-            await using var db = CreateContext();
-            var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive);
-            if (user == null) return (false, "", "");
-            if (!VerifyPassword(password, user.PasswordHash)) return (false, "", "");
-            user.LastLogin = DateTime.Now;
-            await db.SaveChangesAsync();
-            return (true, user.Role, user.UserName);
+            try
+            {
+                await using var db = CreateContext();
+                var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive);
+                if (user == null) return (false, "", "");
+                if (!VerifyPassword(password, user.PasswordHash)) return (false, "", "");
+                user.LastLogin = DateTime.Now;
+                await db.SaveChangesAsync();
+                return (true, user.Role, user.UserName);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] 인증 오류: {ex.Message}");
+                return (false, "", "");
+            }
         }
         public async Task SyncMachineSettingsAsync(string machineId, string ip, int port)
         {

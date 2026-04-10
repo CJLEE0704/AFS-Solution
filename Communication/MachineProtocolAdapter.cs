@@ -9,6 +9,8 @@ namespace PipeBendingDashboard.Communication
         string? GetReadyCommand();
         string GetStatusCommand();
         string? ResolveCommand(string commandType);
+        string? EncodeRequest(MachineCommandRequest request);
+        MachineCommandResponse DecodeResponse(MachineCommandRequest request, string response);
         ParsedMachineStatus ParseStatus(string response);
         MachineRunState ParseRunState(string response);
     }
@@ -25,18 +27,48 @@ namespace PipeBendingDashboard.Communication
     public sealed class DefaultMachineProtocolAdapter : IMachineProtocolAdapter
     {
         private readonly Dictionary<string, string> _commands;
+        private readonly string _wirePrefix;
         public string MachineId { get; }
 
         public DefaultMachineProtocolAdapter(string machineId, Dictionary<string, string> commands)
         {
             MachineId = machineId;
             _commands = commands;
+            _wirePrefix = commands.TryGetValue("STATUS", out var st) && st.Contains(':')
+                ? st[..st.IndexOf(':')]
+                : machineId;
         }
 
         public string? GetReadyCommand() => _commands.TryGetValue("READY", out var cmd) ? cmd : null;
         public string GetStatusCommand() => _commands.TryGetValue("STATUS", out var cmd) ? cmd : string.Empty;
         public string? ResolveCommand(string commandType) => _commands.TryGetValue(commandType.ToUpperInvariant(), out var cmd) ? cmd : null;
         public ParsedMachineStatus ParseStatus(string response) => MachineProtocol.ParseStatusResponse(response);
+        public string? EncodeRequest(MachineCommandRequest request)
+        {
+            var key = request.CommandType.ToString().ToUpperInvariant();
+            var legacy = ResolveCommand(key);
+            if (!string.IsNullOrWhiteSpace(legacy)) return legacy;
+
+            // 확장 명령: 내부 표준 모델 -> 기본 TCP 텍스트 프레임
+            var payload = request.Payload?.Raw?.Trim() ?? "";
+            var suffix = string.IsNullOrWhiteSpace(payload) ? "" : $" {payload}";
+
+            return request.CommandType switch
+            {
+                MachineCommandType.LoadJob      => $"{_wirePrefix}:JOB_LOAD{suffix}\r\n",
+                MachineCommandType.ExecuteJob   => $"{_wirePrefix}:JOB_EXEC{suffix}\r\n",
+                MachineCommandType.CuttingJob   => $"{_wirePrefix}:CUT_JOB{suffix}\r\n",
+                MachineCommandType.MarkingJob   => $"{_wirePrefix}:MARK_JOB{suffix}\r\n",
+                MachineCommandType.BendingJob   => $"{_wirePrefix}:BEND_JOB{suffix}\r\n",
+                MachineCommandType.MoveTransfer => $"{_wirePrefix}:MOVE{suffix}\r\n",
+                MachineCommandType.Abort        => $"{_wirePrefix}:ABORT\r\n",
+                MachineCommandType.Custom       => string.IsNullOrWhiteSpace(payload) ? null : $"{_wirePrefix}:{payload}\r\n",
+                _ => null
+            };
+        }
+
+        public MachineCommandResponse DecodeResponse(MachineCommandRequest request, string response)
+            => MachineProtocol.ParseCommandResponse(MachineId, request.CommandType, response, request.CorrelationId);
 
         public MachineRunState ParseRunState(string response)
         {

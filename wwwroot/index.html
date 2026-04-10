@@ -6189,12 +6189,10 @@ function initSettingsPage(){
   const settGrid = document.getElementById('settGrid');
 
   if(userRole==='admin'){
-    // DB 기반 인증 전용: 앱 내부 계정 관리는 비활성
-    if(sub) sub.textContent='장비 구성 선택 · 선택한 장비만 Operation에서 가동';
-    if(userSection){ userSection.style.display='none'; }
-    if(cfgSection){ cfgSection.style.display='flex'; }
-    loadSelectedConfig();
-    renderCfgCards();
+    if(sub) sub.textContent='DB 사용자 관리';
+    if(cfgSection){ cfgSection.style.display='none'; }
+    if(userSection){ userSection.style.display='flex'; userSection.style.flex='1'; }
+    requestUsersFromDb();
   } else {
     // Worker: 장비 구성 전체 너비, 계정 관리 숨김
     if(sub) sub.textContent='장비 구성 선택 · 선택한 장비만 Operation에서 가동';
@@ -6206,10 +6204,71 @@ function initSettingsPage(){
   }
 }
 
-// ── 계정 관리 (DB 전용 인증으로 전환되어 비활성) ──
+// ── 계정 관리 (DB users 테이블 기반) ──
+let _dbUsers = [];
+let userEditIdx = null;
+
+function requestUsersFromDb(){
+  window.sendToCSharp?.('REQUEST_USERS','ALL','');
+}
+
 function renderUserList(){
-  const section=document.getElementById('settingsUserSection');
-  if(section) section.style.display='none';
+  const el=document.getElementById('userList'); if(!el) return;
+  if(!_dbUsers.length){
+    el.innerHTML = `<div style="text-align:center;padding:20px 10px;color:var(--dim);font-size:9px;border:1px dashed var(--border);border-radius:6px">등록된 사용자가 없습니다</div>`;
+    return;
+  }
+  const roleCol=r=>r==='admin'?'#6FB6C9':'#6FB58A';
+  const roleIcon=r=>r==='admin'?'👔':'🔧';
+  el.innerHTML = _dbUsers.map((u,idx)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--sb);margin-bottom:4px">
+      <div style="width:26px;height:26px;border-radius:50%;background:${roleCol(u.role)}22;border:1px solid ${roleCol(u.role)}44;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0">${roleIcon(u.role)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700;color:var(--bright)">${u.name||u.id}</div>
+        <div style="font-size:8px;color:var(--dim);font-family:monospace">${u.id}</div>
+      </div>
+      ${u.fixedUser ? `<span style="font-size:8px;color:var(--dim);padding:2px 8px;border-radius:3px;background:var(--panel2);border:1px solid var(--border)">고정</span>` : `
+        <button onclick="editUser(${idx})" style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid var(--border2);color:var(--text);font-size:8.5px;cursor:pointer;flex-shrink:0">수정</button>
+        <button onclick="deleteUser(${idx})" style="padding:3px 9px;border-radius:4px;background:transparent;border:1px solid rgba(199,110,130,.4);color:var(--red);font-size:8.5px;cursor:pointer;flex-shrink:0">삭제</button>`}
+    </div>`).join('');
+}
+function openAddUser(){
+  userEditIdx=null;
+  document.getElementById('userFormTitle').textContent='새 계정 추가';
+  document.getElementById('uName').value='';
+  document.getElementById('uId').value='';
+  document.getElementById('uPw').value='';
+  document.getElementById('uRole').value='worker';
+  document.getElementById('userFormErr').style.display='none';
+  document.getElementById('userForm').style.display='block';
+}
+function editUser(idx){
+  const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
+  userEditIdx=idx;
+  document.getElementById('userFormTitle').textContent='계정 수정';
+  document.getElementById('uName').value=u.name||'';
+  document.getElementById('uId').value=u.id||'';
+  document.getElementById('uPw').value='';
+  document.getElementById('uRole').value=u.role||'worker';
+  document.getElementById('userFormErr').style.display='none';
+  document.getElementById('userForm').style.display='block';
+}
+function cancelUser(){ document.getElementById('userForm').style.display='none'; userEditIdx=null; }
+function togglePwVisible(){ const el=document.getElementById('uPw'); el.type=el.type==='password'?'text':'password'; }
+function saveUser(){
+  const id=document.getElementById('uId').value.trim();
+  const name=document.getElementById('uName').value.trim()||id;
+  const pw=document.getElementById('uPw').value.trim();
+  const role=document.getElementById('uRole').value;
+  const errEl=document.getElementById('userFormErr');
+  if(!id){errEl.style.display='block';errEl.textContent='아이디를 입력하세요';return;}
+  if(userEditIdx===null && !pw){errEl.style.display='block';errEl.textContent='신규 계정은 비밀번호가 필요합니다';return;}
+  window.sendToCSharp?.('UPSERT_USER','AUTH', JSON.stringify({id,name,pw,role}));
+}
+function deleteUser(idx){
+  const u=_dbUsers[idx]; if(!u || u.fixedUser) return;
+  if(!confirm(`"${u.name||u.id}" (${u.id}) 계정을 비활성화하시겠습니까?`)) return;
+  window.sendToCSharp?.('DELETE_USER','AUTH', JSON.stringify({id:u.id}));
 }
 function openAddUser(){}
 function editUser(idx){}
@@ -6763,6 +6822,34 @@ window.onCSharpMessage = function(msg){
         ok ? '✅ MariaDB 연결 성공 — 생산 데이터 저장 활성화'
            : '⚠ MariaDB 연결 실패 — 오프라인 모드로 동작',
         ok ? 'var(--green)' : 'var(--yellow)');
+    }
+
+    if(msg.type === 'usersData' && Array.isArray(msg.data)){
+      _dbUsers = msg.data.map(u=>({
+        id:u.id, name:u.name, role:u.role||'worker', fixedUser:!!u.fixedUser
+      }));
+      renderUserList();
+      return;
+    }
+
+    if(msg.type === 'userSaved' && msg.data){
+      if(msg.data.ok){
+        cancelUser();
+        requestUsersFromDb();
+      } else {
+        const errEl=document.getElementById('userFormErr');
+        if(errEl){ errEl.style.display='block'; errEl.textContent=msg.data.message||'저장 실패'; }
+      }
+      return;
+    }
+
+    if(msg.type === 'userDeleted' && msg.data){
+      if(msg.data.ok){
+        requestUsersFromDb();
+      } else {
+        alert('삭제 실패: '+(msg.data.message||'UNKNOWN'));
+      }
+      return;
     }
 
     // ── 로그인 인증 결과 (DB 우선 인증) ─────────────────────

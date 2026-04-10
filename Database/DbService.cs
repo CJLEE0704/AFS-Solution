@@ -376,6 +376,98 @@ namespace PipeBendingDashboard.Database
                 return (false, "", "");
             }
         }
+
+        public async Task<object[]> GetUsersAsync()
+        {
+            if (!_isAvailable) return Array.Empty<object>();
+            try
+            {
+                await using var db = CreateContext();
+                var rows = await db.Users
+                    .Where(u => u.IsActive)
+                    .OrderByDescending(u => u.IsFixed)
+                    .ThenBy(u => u.UserId)
+                    .Select(u => new
+                    {
+                        id = u.UserId,
+                        name = u.UserName,
+                        role = u.Role,
+                        fixedUser = u.IsFixed,
+                        isActive = u.IsActive,
+                        lastLogin = u.LastLogin
+                    })
+                    .ToListAsync();
+                return rows.Cast<object>().ToArray();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] 사용자 조회 오류: {ex.Message}");
+                return Array.Empty<object>();
+            }
+        }
+
+        public async Task<(bool ok, string message)> UpsertUserAsync(string userId, string userName, string password, string role)
+        {
+            if (!_isAvailable) return (false, "DB_UNAVAILABLE");
+            try
+            {
+                await using var db = CreateContext();
+                var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+                var now = DateTime.Now;
+                if (user == null)
+                {
+                    db.Users.Add(new UserEntity
+                    {
+                        UserId = userId,
+                        UserName = userName,
+                        PasswordHash = HashPassword(password),
+                        Role = role,
+                        IsFixed = false,
+                        IsActive = true,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+                else
+                {
+                    if (user.IsFixed) return (false, "FIXED_USER_READONLY");
+                    user.UserName = userName;
+                    user.Role = role;
+                    if (!string.IsNullOrWhiteSpace(password))
+                        user.PasswordHash = HashPassword(password);
+                    user.IsActive = true;
+                    user.UpdatedAt = now;
+                }
+                await db.SaveChangesAsync();
+                return (true, "OK");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] 사용자 저장 오류: {ex.Message}");
+                return (false, "DB_WRITE_FAILED");
+            }
+        }
+
+        public async Task<(bool ok, string message)> DeactivateUserAsync(string userId)
+        {
+            if (!_isAvailable) return (false, "DB_UNAVAILABLE");
+            try
+            {
+                await using var db = CreateContext();
+                var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId);
+                if (user == null) return (false, "USER_NOT_FOUND");
+                if (user.IsFixed) return (false, "FIXED_USER_READONLY");
+                user.IsActive = false;
+                user.UpdatedAt = DateTime.Now;
+                await db.SaveChangesAsync();
+                return (true, "OK");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DB] 사용자 삭제 오류: {ex.Message}");
+                return (false, "DB_WRITE_FAILED");
+            }
+        }
         public async Task SyncMachineSettingsAsync(string machineId, string ip, int port)
         {
             if (!_isAvailable) return;

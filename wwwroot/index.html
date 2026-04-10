@@ -1751,6 +1751,8 @@ function _finalizeLoginFail(){
   });
   document.getElementById('loginPw').value='';
 }
+window._finalizeLoginSuccess = _finalizeLoginSuccess;
+window._finalizeLoginFail = _finalizeLoginFail;
 function syncHostWindowChrome(){
   try{
     let mode='normal';

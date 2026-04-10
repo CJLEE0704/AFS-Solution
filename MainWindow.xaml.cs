@@ -637,7 +637,7 @@ namespace PipeBendingDashboard
                     var failNoDb = JsonSerializer.Serialize(new
                     {
                         type = "authResult",
-                        data = new { ok = false, role = "", userName = "", userId, reqId, reason = "DB_UNAVAILABLE" }
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "DB_UNAVAILABLE" }
                     });
                     Dispatcher.Invoke(() => SendToWebView(failNoDb));
                     return;
@@ -647,7 +647,15 @@ namespace PipeBendingDashboard
                 var json = JsonSerializer.Serialize(new
                 {
                     type = "authResult",
-                    data = new { ok = result.ok, role = result.role, userName = result.userName, userId, reqId, reason = result.ok ? "" : "INVALID_CREDENTIALS" }
+                    data = new
+                    {
+                        ok = result.ok,
+                        role = result.role,
+                        userName = result.userName,
+                        userId,
+                        reqId,
+                        message = result.ok ? "OK" : "INVALID_CREDENTIALS"
+                    }
                 });
                 Dispatcher.Invoke(() => SendToWebView(json));
                 if (result.ok)
@@ -661,7 +669,7 @@ namespace PipeBendingDashboard
                     var failJson = JsonSerializer.Serialize(new
                     {
                         type = "authResult",
-                        data = new { ok = false, role = "", userName = "", userId, reqId, reason = "AUTH_EXCEPTION" }
+                        data = new { ok = false, role = "", userName = "", userId, reqId, message = "AUTH_EXCEPTION" }
                     });
                     Dispatcher.Invoke(() => SendToWebView(failJson));
                 }

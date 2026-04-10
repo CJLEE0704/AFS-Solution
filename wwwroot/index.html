@@ -7004,6 +7004,36 @@ window.sendStructuredCommand = function(req){
     }
   } catch(e){ console.error('[sendStructuredCommand]', e); }
 };
+
+// 단계별 샘플 명령 (내부 표준 프로토콜 테스트용)
+window.sendSampleCuttingJob = function(target='CUTTING'){
+  sendStructuredCommand({
+    target,
+    commandType:'CUTTING_JOB',
+    payload:{ jobId:'CUT-DEMO-001', pipeId:'P-1001', materialCode:'ST', lengthMm:1200, quantity:1, programId:'CUT-PGM-A' }
+  });
+};
+window.sendSampleMarkingJob = function(target='LASER'){
+  sendStructuredCommand({
+    target,
+    commandType:'MARKING_JOB',
+    payload:{ jobId:'MARK-DEMO-001', pipeId:'P-1001', markText:'AFP-DEMO', barcode:'AFS-0001', templateId:'TMP-A' }
+  });
+};
+window.sendSampleRobotTransfer = function(target='ROBOT'){
+  sendStructuredCommand({
+    target,
+    commandType:'MOVE_TRANSFER',
+    payload:{ jobId:'TR-DEMO-001', pipeId:'P-1001', fromStage:'CUTTING', toStage:'BENDING', gripProfile:'STD-PIPE' }
+  });
+};
+window.sendSampleBendingJob = function(target='BENDING'){
+  sendStructuredCommand({
+    target,
+    commandType:'BENDING_JOB',
+    payload:{ jobId:'BEND-DEMO-001', pipeId:'P-1001', programId:'BEND-PGM-A', steps:[{seq:1,angleDeg:45,radiusMm:60,feedMm:350}] }
+  });
+};
 </script>
 <script src="./js/project-store.js"></script>
 <script src="./js/comm-bridge.js"></script>

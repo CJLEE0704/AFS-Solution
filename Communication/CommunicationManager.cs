@@ -832,6 +832,51 @@ namespace PipeBendingDashboard.Communication
             _bending2Client.Dispose();
         }
 
+        // ── 단계별 Payload 명령 전송 편의 메서드 (내부 모델 기반) ──
+        public Task SendCuttingJobAsync(string targetMachineId, CuttingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "CUTTING_JOB",
+                CommandType = "CUTTING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromCutting(payload).Raw
+            });
+
+        public Task SendMarkingJobAsync(string targetMachineId, MarkingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "MARKING_JOB",
+                CommandType = "MARKING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromMarking(payload).Raw
+            });
+
+        public Task SendRobotTransferAsync(string targetMachineId, RobotTransferPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "MOVE_TRANSFER",
+                CommandType = "MOVE_TRANSFER",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromRobotTransfer(payload).Raw
+            });
+
+        public Task SendBendingJobAsync(string targetMachineId, BendingJobPayload payload, string? correlationId = null)
+            => HandleWebCommandAsync(new WebCommand
+            {
+                Target = targetMachineId,
+                Type = "BENDING_JOB",
+                CommandType = "BENDING_JOB",
+                CorrelationId = correlationId ?? Guid.NewGuid().ToString("N"),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                Data = MachinePayloadFactory.FromBending(payload).Raw
+            });
+
         private static bool TryBuildCommandRequest(WebCommand cmd, out MachineCommandRequest request, out string error)
         {
             request = new MachineCommandRequest();

@@ -6293,13 +6293,6 @@ function deleteUser(idx){
   if(!confirm(`"${u.name||u.id}" (${u.id}) 계정을 비활성화하시겠습니까?`)) return;
   window.sendToCSharp?.('DELETE_USER','ADMIN', JSON.stringify({id:u.id,actorRole:runtimeRole}));
 }
-function openAddUser(){}
-function editUser(idx){}
-function cancelUser(){}
-function togglePwVisible(){}
-function saveUser(){}
-function deleteUser(idx){}
-
 // ═══════════════════════════════════════════════════════════════
 // WORKER PAGE MODULE
 // ═══════════════════════════════════════════════════════════════

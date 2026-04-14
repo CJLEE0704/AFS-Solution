@@ -36,6 +36,7 @@ Console.WriteLine("  alarm <MACHINE_ID> <ERROR_CODE>");
 Console.WriteLine("  reset <MACHINE_ID>");
 Console.WriteLine("  ready <MACHINE_ID> on|off");
 Console.WriteLine("  complete <MACHINE_ID>");
+Console.WriteLine("  estop <MACHINE_ID>");
 Console.WriteLine("  quit");
 Console.WriteLine();
 
@@ -95,6 +96,10 @@ while (true)
         case "complete":
             target.ForceComplete();
             Console.WriteLine($"forced complete on {parts[1]}");
+            break;
+        case "estop":
+            target.HandleCommand($"{parts[1]}:ESTOP");
+            Console.WriteLine($"e-stop set on {parts[1]}");
             break;
         default:
             Console.WriteLine("unknown command");

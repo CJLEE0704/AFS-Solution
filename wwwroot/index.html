@@ -1241,17 +1241,17 @@ body::before{
     </div>
 
     <!-- MACHINE CARDS — 정적 고정 (initCommPage에서 재생성하지 않음) -->
-    <div id="machineCards" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;flex-shrink:0;overflow:visible">
-      <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
+    <div id="machineCards" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex-shrink:0;min-width:0;overflow:hidden">
+      <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
     </div>
 
     <!-- COMM LOG + COMMAND PANEL -->
-    <div style="flex:1;display:grid;grid-template-columns:1fr 320px;gap:8px;min-height:0;overflow:auto">
+    <div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:8px;min-height:0;min-width:0;overflow:hidden">
       <!-- LOG -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;overflow:hidden;min-height:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-shrink:0">
@@ -5706,7 +5706,7 @@ function _buildCard(mid){
         '<div id="calm_'+mid+'" style="font-size:15px;font-weight:700;color:var(--dim)">—</div>'+
       '</div>'+
     '</div>'+
-    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 7px;background:var(--sb);border-radius:4px;border:1px solid var(--border)">'+
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 7px;background:var(--sb);border-radius:4px;border:1px solid var(--border);min-width:0;overflow:hidden">'+
       '<span style="font-size:9px;color:var(--dim)">🌐</span>'+
       '<span id="cip_'+mid+'" style="font-size:10px;font-family:monospace;color:var(--cyan);font-weight:700">'+m.ip+'</span>'+
       '<span style="font-size:9px;color:var(--dim)">:</span>'+
@@ -5717,7 +5717,7 @@ function _buildCard(mid){
         '<span id="cconntxt_'+mid+'" style="font-size:8.5px;font-weight:700;color:var(--red)">● 미연결</span>'+
       '</div>'+
     '</div>'+
-    '<div id="cmsg_'+mid+'" style="font-size:9px;color:var(--text);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:7px">—</div>'+
+    '<div id="cmsg_'+mid+'" style="font-size:9px;color:var(--text);font-family:monospace;display:block;width:100%;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:7px" title="—">—</div>'+
     '<div style="display:flex;gap:4px">'+
       '<button id="cbtn_start_'+mid+'"  style="flex:1;padding:5px;border-radius:4px;font-size:9.5px;font-weight:700;border:1px solid var(--green)44;background:var(--gg);color:var(--green);cursor:pointer">START</button>'+
       '<button id="cbtn_stop_'+mid+'"   style="flex:1;padding:5px;border-radius:4px;font-size:9.5px;font-weight:700;border:1px solid var(--red)44;background:var(--rg);color:var(--red);cursor:pointer">STOP</button>'+
@@ -5827,7 +5827,11 @@ function renderCard(mid){
   if(ct){ ct.textContent = connText; ct.style.color = connColor; }
   // 메시지
   const msgEl = document.getElementById('cmsg_'+mid);
-  if(msgEl) msgEl.textContent = s.lastMsg || '—';
+  if(msgEl){
+    const fullMsg = s.lastMsg || '—';
+    msgEl.textContent = fullMsg;
+    msgEl.title = fullMsg;
+  }
 }
 
 // ── 설정 패널 토글 — display만 변경, innerHTML 절대 건드리지 않음 ──
@@ -5916,8 +5920,8 @@ function _applyConfigToCommNow(){
 
   const grid = document.getElementById('machineCards');
   if(grid){
-    // Comm 기본 카드 폭 유지 (원래 2열 레이아웃)
-    grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    // 런타임 레이아웃 갱신 시에도 카드 내용이 컬럼 폭을 밀어내지 않도록 minmax 적용
+    grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
   }
 
   // ── 각 카드: 활성/비활성 시각 처리 ──

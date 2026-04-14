@@ -8,6 +8,13 @@ namespace PipeBendingDashboard.Communication
         public bool IsUnloadComplete { get; set; } = false;
         public bool? IsReady { get; set; } = null;
         public string ErrorCode { get; set; } = "";
+        public bool SafeToMove { get; set; }
+        public bool InterlockOk { get; set; }
+        public bool MotionEnable { get; set; }
+        public bool Homed { get; set; }
+        public bool InPosition { get; set; }
+        public bool TargetReached { get; set; }
+        public bool MotionInProgress { get; set; }
     }
 
     /// <summary>
@@ -130,6 +137,14 @@ namespace PipeBendingDashboard.Communication
             if (upper.Contains("READY:1") || upper.Contains("READY=1") || upper.Contains("READY:TRUE")) parsed.IsReady = true;
             if (upper.Contains("READY:0") || upper.Contains("READY=0") || upper.Contains("READY:FALSE") || upper.Contains("NOT_READY")) parsed.IsReady = false;
 
+            parsed.SafeToMove = upper.Contains("SAFE_TO_MOVE=1") || upper.Contains("SAFE_TO_MOVE:1");
+            parsed.InterlockOk = upper.Contains("INTERLOCK_OK=1") || upper.Contains("INTERLOCK_OK:1");
+            parsed.MotionEnable = upper.Contains("MOTION_ENABLE=1") || upper.Contains("MOTION_ENABLE:1");
+            parsed.Homed = upper.Contains("HOMED=1") || upper.Contains("HOMED:1");
+            parsed.InPosition = upper.Contains("IN_POSITION=1") || upper.Contains("IN_POSITION:1");
+            parsed.TargetReached = upper.Contains("TARGET_REACHED=1") || upper.Contains("TARGET_REACHED:1");
+            parsed.MotionInProgress = upper.Contains("MOTION_IN_PROGRESS=1") || upper.Contains("MOTION_IN_PROGRESS:1");
+
             var errorIdx = upper.IndexOf("ERROR_CODE", System.StringComparison.Ordinal);
             if (errorIdx < 0) errorIdx = upper.IndexOf("ERR", System.StringComparison.Ordinal);
             if (errorIdx >= 0)
@@ -160,12 +175,32 @@ namespace PipeBendingDashboard.Communication
             {
                 MachineId = machineId,
                 CommandType = commandType,
+                CommandCode = commandType.ToString().ToUpperInvariant(),
                 RawResponse = raw,
                 CorrelationId = correlationId,
                 ReceivedAtUtc = DateTime.UtcNow,
                 ResponseType = MachineResponseType.Unknown,
                 IsSuccess = false
             };
+
+            result.SequenceNo = TryExtractLong(raw, "SEQ");
+            result.ProtocolVersion = TryExtractToken(raw, "VER");
+            if (string.IsNullOrWhiteSpace(result.ProtocolVersion)) result.ProtocolVersion = "INT/1.1";
+            result.MachineProfile = TryExtractToken(raw, "MPROF");
+            if (string.IsNullOrWhiteSpace(result.MachineProfile)) result.MachineProfile = "GENERIC";
+            result.VendorProfile = TryExtractToken(raw, "VPROF");
+            if (string.IsNullOrWhiteSpace(result.VendorProfile)) result.VendorProfile = "INTERNAL";
+            result.JobId = TryExtractToken(raw, "JOB");
+            result.PipeId = TryExtractToken(raw, "PIPE");
+            result.Stage = TryExtractToken(raw, "STAGE");
+            result.TargetMachine = TryExtractToken(raw, "TARGET");
+            result.MotionSafety.SafeToMove = IsTrueToken(TryExtractToken(raw, "SAFE_TO_MOVE"));
+            result.MotionSafety.InterlockOk = IsTrueToken(TryExtractToken(raw, "INTERLOCK_OK"));
+            result.MotionSafety.MotionEnable = IsTrueToken(TryExtractToken(raw, "MOTION_ENABLE"));
+            result.MotionSafety.Homed = IsTrueToken(TryExtractToken(raw, "HOMED"));
+            result.MotionSafety.InPosition = IsTrueToken(TryExtractToken(raw, "IN_POSITION"));
+            result.MotionSafety.TargetReached = IsTrueToken(TryExtractToken(raw, "TARGET_REACHED"));
+            result.MotionSafety.MotionInProgress = IsTrueToken(TryExtractToken(raw, "MOTION_IN_PROGRESS"));
 
             if (string.IsNullOrWhiteSpace(raw))
             {
@@ -180,13 +215,42 @@ namespace PipeBendingDashboard.Communication
                 result.IsSuccess = true;
                 var cid = TryExtractToken(raw, "CID");
                 if (!string.IsNullOrWhiteSpace(cid)) result.CorrelationId = cid;
+                result.CommandCode = string.IsNullOrWhiteSpace(TryExtractToken(raw, "CMD"))
+                    ? result.CommandCode
+                    : TryExtractToken(raw, "CMD");
                 return result;
             }
 
             if (upper.StartsWith("ERROR") || upper.StartsWith("FAIL") || upper.StartsWith("NACK"))
             {
                 result.ResponseType = MachineResponseType.Rejected;
-                result.ErrorCode = "COMMAND_REJECTED";
+                result.ErrorCode = TryExtractToken(raw, "CODE");
+                if (string.IsNullOrWhiteSpace(result.ErrorCode)) result.ErrorCode = "COMMAND_REJECTED";
+                result.AlarmCode = result.ErrorCode;
+                result.AlarmMessage = TryExtractToken(raw, "MSG");
+                result.Severity = TryExtractToken(raw, "SEV");
+                result.ResetRequired = IsTrueToken(TryExtractToken(raw, "RESET_REQUIRED"));
+                return result;
+            }
+
+            if (upper.Contains("NOT_READY"))
+            {
+                result.ResponseType = MachineResponseType.NotReady;
+                result.ErrorCode = "NOT_READY";
+                return result;
+            }
+
+            if (upper.Contains("STOPPED") || upper.Contains("IDLE_STOP"))
+            {
+                result.ResponseType = MachineResponseType.Stopped;
+                result.IsSuccess = true;
+                return result;
+            }
+
+            if (upper.Contains("OFFLINE") || upper.Contains("DISCONNECTED"))
+            {
+                result.ResponseType = MachineResponseType.Offline;
+                result.ErrorCode = "OFFLINE";
                 return result;
             }
 
@@ -194,6 +258,7 @@ namespace PipeBendingDashboard.Communication
             {
                 result.ResponseType = MachineResponseType.InProgress;
                 result.IsSuccess = true;
+                result.MotionSafety.MotionInProgress = true;
                 return result;
             }
 
@@ -208,20 +273,29 @@ namespace PipeBendingDashboard.Communication
             {
                 result.ResponseType = MachineResponseType.EmergencyStop;
                 result.ErrorCode = "EMERGENCY_STOP";
+                result.AlarmCode = "EMERGENCY_STOP";
+                result.Severity = "CRITICAL";
+                result.ResetRequired = true;
                 return result;
             }
 
             if (upper.Contains("FINISH") || upper.Contains("COMPLETE") || upper.Contains("DONE"))
             {
-                result.ResponseType = MachineResponseType.Completed;
+                result.ResponseType = upper.Contains("COMPLETE") ? MachineResponseType.Complete : MachineResponseType.Completed;
                 result.IsSuccess = true;
+                result.MotionSafety.TargetReached = true;
                 return result;
             }
 
             if (upper.Contains("ALARM") || upper.Contains("FAULT"))
             {
                 result.ResponseType = upper.Contains("FAULT") ? MachineResponseType.Fault : MachineResponseType.Alarm;
-                result.ErrorCode = upper.Contains("FAULT") ? "FAULT" : "ALARM";
+                result.ErrorCode = TryExtractToken(raw, "ERROR_CODE");
+                if (string.IsNullOrWhiteSpace(result.ErrorCode)) result.ErrorCode = upper.Contains("FAULT") ? "FAULT" : "ALARM";
+                result.AlarmCode = result.ErrorCode;
+                result.AlarmMessage = TryExtractToken(raw, "MSG");
+                result.Severity = TryExtractToken(raw, "SEV");
+                result.ResetRequired = IsTrueToken(TryExtractToken(raw, "RESET_REQUIRED"));
                 return result;
             }
 
@@ -246,6 +320,19 @@ namespace PipeBendingDashboard.Communication
             var remain = raw[start..];
             var end = remain.IndexOfAny(new[] { ';', ',', ' ', '\r', '\n' });
             return (end < 0 ? remain : remain[..end]).Trim();
+        }
+
+        private static long TryExtractLong(string raw, string key)
+        {
+            var token = TryExtractToken(raw, key);
+            return long.TryParse(token, out var n) ? n : 0;
+        }
+
+        private static bool IsTrueToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token)) return false;
+            var upper = token.Trim().ToUpperInvariant();
+            return upper == "1" || upper == "TRUE" || upper == "Y" || upper == "YES";
         }
     }
 }

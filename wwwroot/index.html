@@ -5916,8 +5916,8 @@ function _applyConfigToCommNow(){
 
   const grid = document.getElementById('machineCards');
   if(grid){
-    // 6개 카드 표시
-    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    // Comm 기본 카드 폭 유지 (원래 2열 레이아웃)
+    grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
   }
 
   // ── 각 카드: 활성/비활성 시각 처리 ──

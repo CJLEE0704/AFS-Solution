@@ -410,7 +410,7 @@ namespace PipeBendingDashboard.Communication
                     return;
                 }
                 status.IsConnected  = true;
-                status.LastMessage  = response.Trim();
+                status.LastMessage  = SummarizeOperatorResponse(response.Trim());
                 var parsed = _protocolAdapters.TryGetValue(status.MachineId, out var adapter)
                     ? adapter.ParseStatus(response)
                     : MachineProtocol.ParseStatusResponse(response);

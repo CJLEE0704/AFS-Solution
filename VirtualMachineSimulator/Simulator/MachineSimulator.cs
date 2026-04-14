@@ -130,7 +130,10 @@ public sealed class MachineSimulator
     {
         lock (_sync)
         {
-            return $"{State.MachineId,-8} Port={State.Port} State={State.RunState,-12} Ready={State.IsReady,-5} Alarm={State.ErrorCode,-12} LastCmd={State.LastCommandCode,-16} CID={State.LastCorrelationId}";
+            return $"{State.MachineId,-8} Port={State.Port} Client={(State.IsConnectedClientPresent ? "Y" : "N")} " +
+                   $"State={State.RunState,-12} Ready={(State.IsReady ? 1 : 0)} Alarm={State.ErrorCode,-12} " +
+                   $"Cmd={State.LastCommandCode,-14} CID={State.LastCorrelationId,-12} " +
+                   $"SafeMove={(State.SafeToMove ? 1 : 0)} Interlock={(State.InterlockOk ? 1 : 0)} Motion={(State.MotionInProgress ? 1 : 0)} Target={(State.TargetReached ? 1 : 0)}";
         }
     }
 

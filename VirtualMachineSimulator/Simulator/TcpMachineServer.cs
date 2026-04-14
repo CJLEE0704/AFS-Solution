@@ -23,27 +23,35 @@ public sealed class TcpMachineServer
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _listener = new TcpListener(_bindAddress, _setting.Port);
-        _listener.Start();
-        Console.WriteLine($"[{_setting.Id}] listening on {_bindAddress}:{_setting.Port}");
-
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            TcpClient client;
-            try
-            {
-                client = await _listener.AcceptTcpClientAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
+            _listener = new TcpListener(_bindAddress, _setting.Port);
+            _listener.Start();
+            Console.WriteLine($"[{_setting.Id}] listening on {_bindAddress}:{_setting.Port}");
 
-            _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
+                _ = Task.Run(() => HandleClientAsync(client, cancellationToken), cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[{_setting.Id}] server start/runtime error: {ex.Message}");
+            throw;
         }
     }
 

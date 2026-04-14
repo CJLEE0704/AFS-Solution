@@ -1258,7 +1258,7 @@ body::before{
           <div class="pt" style="margin-bottom:0">통신 로그</div>
           <button onclick="clearLog()" style="font-size:8.5px;color:var(--dim);background:transparent;border:none;cursor:pointer;padding:2px 6px">지우기</button>
         </div>
-        <div id="commLog" style="flex:1;overflow-y:auto;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
+        <div id="commLog" style="flex:1;overflow-y:auto;overflow-x:hidden;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
       </div>
       <!-- COMMAND PANEL -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto">
@@ -5517,7 +5517,7 @@ function simCmd(target,code,param){
     ids.forEach(mid=>{
       const s=machSt[mid]; let resp='';
       if(code==='START'){s.status='WORKING';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
-      else if(code==='STOP'){s.status='READY';s.speed=0;resp='정지 완료';}
+      else if(code==='STOP'){s.status='STOPPED';s.speed=0;resp='정지 완료';}
       else if(code==='RESET'){s.status='READY';s.alarm=false;s.errorCode='';s.oee=0;s.speed=0;resp='리셋 완료';}
       else if(code==='STATUS'){resp=`STATUS:${s.status} OEE:${s.oee.toFixed(1)}% SPD:${Math.round(s.speed)}`;}
       else if(code==='SPEED'){s.speed=parseInt(param)||100;resp='속도 설정: '+s.speed;}
@@ -5636,11 +5636,11 @@ function clog(src,type,msg,col){
   const t=new Date().toLocaleTimeString('ko-KR',{hour12:false});
   const tCol={SEND:'#B79A5F',RECV:'#6FB58A',ERROR:'#B86A77',CONNECTED:'#6FB58A',CLOSED:'#B79A5F'}[type]||col||'#6FB6C9';
   const row=document.createElement('div');
-  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
   row.innerHTML=`<span style="color:#637183">${t}</span> `
     +`<span style="color:${tCol};font-weight:700;min-width:50px;display:inline-block">[${type}]</span> `
     +`<span style="color:#6FB6C9;font-weight:700;min-width:58px;display:inline-block">${src}</span> `
-    +`<span style="color:#98A9B9">${msg}</span>`;
+    +`<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 180px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg}</span>`;
   el.appendChild(row);
   // 최대 200줄 유지
   while(el.children.length>200)el.removeChild(el.firstChild);
@@ -5687,9 +5687,10 @@ function _buildCard(mid){
         '</div>'+
       '</div>'+
       '<div style="display:flex;gap:6px">'+
-        '<button id="capply_'+mid+'" style="flex:1;padding:6px;border-radius:5px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#183345,#69B8D6);border:1px solid #69B8D6;color:#fff;cursor:pointer">✔ 저장 및 적용</button>'+
+        '<button id="capply_'+mid+'" style="flex:1;padding:6px;border-radius:5px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#183345,#69B8D6);border:1px solid #69B8D6;color:#fff;cursor:pointer">✔ 변경 저장/적용</button>'+
         '<button id="creset_'+mid+'" style="padding:6px 12px;border-radius:5px;font-size:10px;font-weight:700;background:var(--panel);border:1px solid var(--border2);color:var(--dim);cursor:pointer">초기화</button>'+
       '</div>'+
+      '<div style="margin-top:6px;font-size:9px;color:var(--dim);line-height:1.45">※ 평상시에는 자동 연결/자동 재연결됩니다. IP/Port를 변경했을 때만 적용 버튼을 누르세요.</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">'+
       '<div style="background:var(--sb);border-radius:5px;padding:5px;text-align:center">'+
@@ -5755,8 +5756,26 @@ function renderCard(mid){
   }
 
   const effStatus = s.alarm ? 'ALARM' : s.status;
-  const stColor = {READY:'#73C59B',WORKING:'#6FB6C9',FINISH:'#CBAF6D',ALARM:'#D37489'}[effStatus] || '#72879E';
-  const stTxt   = {READY:'준비 완료',WORKING:'작업 중',FINISH:'가공 완료',ALARM:'알람'}[effStatus] || s.status;
+  const stColor = {
+    READY:'#73C59B',
+    WORKING:'#6FB6C9',
+    STOPPED:'#B7A7D9',
+    IDLE:'#B7A7D9',
+    WAIT:'#D1B672',
+    FINISH:'#CBAF6D',
+    ALARM:'#D37489',
+    FAULT:'#D37489'
+  }[effStatus] || '#72879E';
+  const stTxt   = {
+    READY:'준비 완료',
+    WORKING:'작업 중',
+    STOPPED:'정지됨',
+    IDLE:'대기',
+    WAIT:'대기 중',
+    FINISH:'가공 완료',
+    ALARM:'알람',
+    FAULT:'장애'
+  }[effStatus] || s.status;
 
   // 상태 dot
   const dot = document.getElementById('cdot_'+mid);
@@ -5785,11 +5804,26 @@ function renderCard(mid){
   const ipEl = document.getElementById('cip_'+mid); if(ipEl) ipEl.textContent = m.ip;
   const pEl  = document.getElementById('cport_'+mid); if(pEl) pEl.textContent = m.port;
   // 연결 상태
-  const connColor = s.ready?'var(--green)':s.connected?'var(--yellow)':'var(--red)';
-  const connText  = s.ready?'● Ready':s.connected?'● 연결됨 (준비 중)':'● 미연결';
+  const isDisconnected = !s.connected;
+  const isFault = s.alarm || effStatus === 'ALARM' || effStatus === 'FAULT';
+  const isRunning = effStatus === 'WORKING';
+  const isStopped = effStatus === 'STOPPED' || effStatus === 'IDLE';
+  const isReadyState = effStatus === 'READY' && s.ready;
+  const connColor = isDisconnected ? 'var(--red)'
+                 : isFault ? 'var(--red)'
+                 : isRunning ? 'var(--cyan)'
+                 : isStopped ? 'var(--purple)'
+                 : isReadyState ? 'var(--green)'
+                 : 'var(--yellow)';
+  const connText = isDisconnected ? '● 미연결'
+                : isFault ? '● 연결됨 (장애/알람)'
+                : isRunning ? '● 연결됨 (가동 중)'
+                : isStopped ? '● 연결됨 (정지/대기)'
+                : isReadyState ? '● 연결됨 (준비 완료)'
+                : '● 연결됨 (WAIT)';
   const cd = document.getElementById('cconndot_'+mid);
   const ct = document.getElementById('cconntxt_'+mid);
-  if(cd){ cd.style.background = connColor; cd.style.animation = s.ready?'dotBlink 1.5s infinite':'none'; }
+  if(cd){ cd.style.background = connColor; cd.style.animation = (isRunning || isReadyState)?'dotBlink 1.5s infinite':'none'; }
   if(ct){ ct.textContent = connText; ct.style.color = connColor; }
   // 메시지
   const msgEl = document.getElementById('cmsg_'+mid);
@@ -5842,7 +5876,7 @@ function applyCardSettings(mid){
   _cardEditing[mid] = false;   // 편집창 닫기
   renderCard(mid);
 
-  clog('SYS','OK','['+mid+'] 설정 저장 — IP: '+newIp+', Port: '+newPort,'var(--green)');
+  clog('SYS','OK','['+mid+'] 설정 변경 저장/적용 — IP: '+newIp+', Port: '+newPort,'var(--green)');
 }
 
 // ── 공장 초기값으로 완전 초기화 (MACHINES_DEFAULT 기준) ──
@@ -6802,11 +6836,11 @@ window.onCSharpMessage = function(msg){
       if(logEl){
         const t = new Date().toLocaleTimeString('ko-KR',{hour12:false});
         const row = document.createElement('div');
-        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
         row.innerHTML =
           `<span style="color:#637183">${t}</span> `+
           `<span style="color:#6FB6C9;font-weight:700;min-width:70px;display:inline-block">[${msg.data.machineId||'SYS'}]</span> `+
-          `<span style="color:#98A9B9">${msg.data.message||''}</span>`;
+          `<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 140px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg.data.message||''}</span>`;
         logEl.appendChild(row);
         // 최대 200줄 유지
         while(logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
@@ -6848,7 +6882,7 @@ window.onCSharpMessage = function(msg){
         st.lastMsg = response;
         if(isOk){
           if(cmdType==='START') st.status='WORKING';
-          if(cmdType==='STOP')  st.status='READY';
+          if(cmdType==='STOP')  st.status='STOPPED';
           if(cmdType==='RESET'){st.status='READY'; st.alarm=false; st.errorCode='';}
         }
         if(isErr){ st.alarm = true; st.status='ALARM'; }

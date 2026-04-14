@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 
 namespace PipeBendingDashboard.Communication
 {
@@ -8,6 +9,7 @@ namespace PipeBendingDashboard.Communication
     {
         Start,
         Stop,
+        EmergencyStop,
         Status,
         Reset,
         Ready,
@@ -28,8 +30,12 @@ namespace PipeBendingDashboard.Communication
     public enum MachineResponseType
     {
         Ack,
+        Complete,
         Rejected,
         Ready,
+        Stopped,
+        NotReady,
+        Offline,
         PermitGranted,
         InProgress,
         Completed,
@@ -45,6 +51,21 @@ namespace PipeBendingDashboard.Communication
     {
         public string Raw { get; set; } = "";
         public Dictionary<string, string> Fields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string JobId { get; set; } = "";
+        public string PipeId { get; set; } = "";
+        public string Stage { get; set; } = "";
+        public string TargetMachine { get; set; } = "";
+    }
+
+    public sealed class MachineMotionSafetyFlags
+    {
+        public bool SafeToMove { get; set; }
+        public bool InterlockOk { get; set; }
+        public bool MotionEnable { get; set; }
+        public bool Homed { get; set; }
+        public bool InPosition { get; set; }
+        public bool TargetReached { get; set; }
+        public bool MotionInProgress { get; set; }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -129,16 +150,26 @@ namespace PipeBendingDashboard.Communication
                     result.Fields[p.Name] = p.Value.ToString();
                 }
             }
+            if (result.Fields.TryGetValue("jobId", out var jobId)) result.JobId = jobId;
+            if (result.Fields.TryGetValue("pipeId", out var pipeId)) result.PipeId = pipeId;
+            if (result.Fields.TryGetValue("stage", out var stage)) result.Stage = stage;
+            if (result.Fields.TryGetValue("targetMachine", out var targetMachine)) result.TargetMachine = targetMachine;
             return result;
         }
     }
 
     public sealed class MachineCommandRequest
     {
+        private static long _sequenceSeed;
         public string TargetMachineId { get; set; } = "";
         public MachineCommandType CommandType { get; set; } = MachineCommandType.Status;
+        public string CommandCode { get; set; } = "";
         public string CorrelationId { get; set; } = Guid.NewGuid().ToString("N");
+        public long SequenceNo { get; set; } = Interlocked.Increment(ref _sequenceSeed);
         public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
+        public string ProtocolVersion { get; set; } = "INT/1.1";
+        public string MachineProfile { get; set; } = "GENERIC";
+        public string VendorProfile { get; set; } = "INTERNAL";
         public MachineCommandPayload Payload { get; set; } = new();
     }
 
@@ -150,7 +181,21 @@ namespace PipeBendingDashboard.Communication
         public bool IsSuccess { get; set; }
         public string RawResponse { get; set; } = "";
         public string ErrorCode { get; set; } = "";
+        public string AlarmCode { get; set; } = "";
+        public string AlarmMessage { get; set; } = "";
+        public string Severity { get; set; } = "";
+        public bool ResetRequired { get; set; }
         public string CorrelationId { get; set; } = "";
+        public long SequenceNo { get; set; }
+        public string ProtocolVersion { get; set; } = "INT/1.1";
+        public string MachineProfile { get; set; } = "GENERIC";
+        public string VendorProfile { get; set; } = "INTERNAL";
+        public string CommandCode { get; set; } = "";
+        public string JobId { get; set; } = "";
+        public string PipeId { get; set; } = "";
+        public string Stage { get; set; } = "";
+        public string TargetMachine { get; set; } = "";
+        public MachineMotionSafetyFlags MotionSafety { get; set; } = new();
         public DateTime ReceivedAtUtc { get; set; } = DateTime.UtcNow;
     }
 }

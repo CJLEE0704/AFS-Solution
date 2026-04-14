@@ -628,6 +628,7 @@ namespace PipeBendingDashboard.Communication
                 status.LastMessage = ack;
                 if (structured.ResponseType == MachineResponseType.Alarm
                     || structured.ResponseType == MachineResponseType.Fault
+                    || structured.ResponseType == MachineResponseType.Offline
                     || structured.ResponseType == MachineResponseType.EmergencyStop
                     || structured.ResponseType == MachineResponseType.Rejected
                     || structured.ResponseType == MachineResponseType.Error)
@@ -658,6 +659,13 @@ namespace PipeBendingDashboard.Communication
                             status.IsReady = true;
                             status.HasAlarm = false;
                             status.ErrorCode = "";
+                            break;
+                        case MachineCommandType.EmergencyStop:
+                            status.Status = "FAULT";
+                            status.StateCode = "ESTOP";
+                            status.IsReady = false;
+                            status.HasAlarm = true;
+                            status.ErrorCode = "EMERGENCY_STOP";
                             break;
                         case MachineCommandType.Reset:
                         case MachineCommandType.Abort:
@@ -1030,9 +1038,15 @@ namespace PipeBendingDashboard.Communication
 
             request.TargetMachineId = target;
             request.CommandType = mappedType;
+            request.CommandCode = string.IsNullOrWhiteSpace(rawType) ? mappedType.ToString().ToUpperInvariant() : rawType.Trim().ToUpperInvariant();
             request.CorrelationId = string.IsNullOrWhiteSpace(cmd.CorrelationId) ? Guid.NewGuid().ToString("N") : cmd.CorrelationId.Trim();
             request.RequestedAtUtc = DateTime.TryParse(cmd.Timestamp, out var ts) ? ts.ToUniversalTime() : DateTime.UtcNow;
             request.Payload = ParsePayload(cmd.Data);
+            request.Payload.TargetMachine = request.TargetMachineId;
+            if (request.Payload.Fields.TryGetValue("jobId", out var jobId)) request.Payload.JobId = jobId;
+            if (request.Payload.Fields.TryGetValue("pipeId", out var pipeId)) request.Payload.PipeId = pipeId;
+            if (request.Payload.Fields.TryGetValue("stage", out var stage)) request.Payload.Stage = stage;
+            if (request.Payload.Fields.TryGetValue("targetMachine", out var targetMachine)) request.Payload.TargetMachine = targetMachine;
             return true;
         }
 
@@ -1064,6 +1078,10 @@ namespace PipeBendingDashboard.Communication
             {
                 case "START": commandType = MachineCommandType.Start; return true;
                 case "STOP": commandType = MachineCommandType.Stop; return true;
+                case "E_STOP":
+                case "ESTOP":
+                case "EMERGENCY_STOP":
+                    commandType = MachineCommandType.EmergencyStop; return true;
                 case "STATUS": commandType = MachineCommandType.Status; return true;
                 case "RESET": commandType = MachineCommandType.Reset; return true;
                 case "READY": case "READY?": commandType = MachineCommandType.Ready; return true;

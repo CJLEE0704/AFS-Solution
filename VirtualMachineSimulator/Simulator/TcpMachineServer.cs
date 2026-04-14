@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using VirtualMachineSimulator.Models;
+using VirtualMachineSimulator.Protocol;
 
 namespace VirtualMachineSimulator.Simulator;
 
@@ -86,14 +87,35 @@ public sealed class TcpMachineServer
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
                 _simulator.Tick();
+                var parsed = ProtocolParsing.Parse(line);
                 var response = _simulator.HandleCommand(line);
+                var responseCategory = ClassifyResponse(response);
                 Console.WriteLine($"[{_setting.Id}] RX: {line}");
+                Console.WriteLine($"[{_setting.Id}] RX-PARSED: type={(parsed.IsLegacy ? "LEGACY" : "STRUCTURED")} cmd={parsed.CommandCode} cid={parsed.CorrelationId} seq={parsed.SequenceNo}");
                 Console.WriteLine($"[{_setting.Id}] TX: {response}");
+                Console.WriteLine($"[{_setting.Id}] TX-CATEGORY: {responseCategory}");
+                Console.WriteLine($"[{_setting.Id}] STATE: {_simulator.Describe()}");
                 await writer.WriteLineAsync(response);
             }
         }
 
         _simulator.State.IsConnectedClientPresent = false;
         Console.WriteLine($"[{_setting.Id}] client disconnected");
+    }
+
+    private static string ClassifyResponse(string response)
+    {
+        var raw = (response ?? string.Empty).Trim();
+        var upper = raw.ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(upper)) return "EMPTY";
+        if (upper.StartsWith("OK")) return "ACK";
+        if (upper.StartsWith("ERROR") || upper.StartsWith("FAIL") || upper.StartsWith("NACK")) return "ERROR/REJECTED";
+        if (upper.Contains("EMERGENCY_STOP") || upper.Contains("ESTOP")) return "E_STOP";
+        if (upper.Contains("ALARM") || upper.Contains("FAULT")) return "ALARM";
+        if (upper.Contains("COMPLETE") || upper.Contains("FINISH") || upper.Contains("DONE")) return "COMPLETE";
+        if (upper.Contains("WORKING") || upper.Contains("RUNNING") || upper.Contains("IN_PROGRESS")) return "STATE";
+        if (upper.Contains("READY")) return "READY";
+        if (upper.Contains("STOPPED") || upper.Contains("IDLE_STOP")) return "STOPPED";
+        return "STATE";
     }
 }

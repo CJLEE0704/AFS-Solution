@@ -589,7 +589,7 @@ namespace PipeBendingDashboard.Communication
                     return;
                 }
 
-                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] → 전송: {cmdType} ({protocol.Trim()})");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] → 전송: {cmdType}");
 
                 // ── 명령 전송 + 장비 ACK 응답 수신 ─────────────────
                 var response = await client.SendReceiveStringAsync(protocol);
@@ -613,7 +613,7 @@ namespace PipeBendingDashboard.Communication
                 }
 
                 var ack = response.Trim();
-                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← ACK: {ack}");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← 응답: {SummarizeOperatorResponse(ack)}");
                 var structured = adapter.DecodeResponse(request, ack);
                 if (!string.IsNullOrWhiteSpace(structured.CorrelationId)
                     && !string.Equals(structured.CorrelationId, request.CorrelationId, StringComparison.OrdinalIgnoreCase))
@@ -761,6 +761,20 @@ namespace PipeBendingDashboard.Communication
             var end  = rest.IndexOfAny(new[] { ',', '\r', '\n', ' ' });
             var num  = end < 0 ? rest : rest[..end];
             return double.TryParse(num, out value);
+        }
+
+        private static string SummarizeOperatorResponse(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "(빈 응답)";
+            var upper = raw.Trim().ToUpperInvariant();
+            if (upper.StartsWith("OK")) return "OK";
+            if (upper.StartsWith("ERROR") || upper.StartsWith("FAIL") || upper.StartsWith("NACK")) return "ERROR";
+            if (upper.Contains("EMERGENCY_STOP") || upper.Contains("ESTOP")) return "EMERGENCY_STOP";
+            if (upper.Contains("ALARM") || upper.Contains("FAULT")) return "ALARM/FAULT";
+            if (upper.Contains("COMPLETE") || upper.Contains("FINISH") || upper.Contains("DONE")) return "COMPLETE";
+            if (upper.Contains("WORKING") || upper.Contains("RUNNING") || upper.Contains("IN_PROGRESS")) return "IN_PROGRESS";
+            if (upper.Contains("READY")) return "READY";
+            return raw.Length > 64 ? raw[..64] + "..." : raw;
         }
 
         private async Task HandleAllTargetAsync(WebCommand cmd)

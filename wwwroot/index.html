@@ -1258,7 +1258,7 @@ body::before{
           <div class="pt" style="margin-bottom:0">통신 로그</div>
           <button onclick="clearLog()" style="font-size:8.5px;color:var(--dim);background:transparent;border:none;cursor:pointer;padding:2px 6px">지우기</button>
         </div>
-        <div id="commLog" style="flex:1;overflow-y:auto;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
+        <div id="commLog" style="flex:1;overflow-y:auto;overflow-x:hidden;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
       </div>
       <!-- COMMAND PANEL -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto">
@@ -5636,11 +5636,11 @@ function clog(src,type,msg,col){
   const t=new Date().toLocaleTimeString('ko-KR',{hour12:false});
   const tCol={SEND:'#B79A5F',RECV:'#6FB58A',ERROR:'#B86A77',CONNECTED:'#6FB58A',CLOSED:'#B79A5F'}[type]||col||'#6FB6C9';
   const row=document.createElement('div');
-  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
   row.innerHTML=`<span style="color:#637183">${t}</span> `
     +`<span style="color:${tCol};font-weight:700;min-width:50px;display:inline-block">[${type}]</span> `
     +`<span style="color:#6FB6C9;font-weight:700;min-width:58px;display:inline-block">${src}</span> `
-    +`<span style="color:#98A9B9">${msg}</span>`;
+    +`<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 180px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg}</span>`;
   el.appendChild(row);
   // 최대 200줄 유지
   while(el.children.length>200)el.removeChild(el.firstChild);
@@ -6836,11 +6836,11 @@ window.onCSharpMessage = function(msg){
       if(logEl){
         const t = new Date().toLocaleTimeString('ko-KR',{hour12:false});
         const row = document.createElement('div');
-        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
         row.innerHTML =
           `<span style="color:#637183">${t}</span> `+
           `<span style="color:#6FB6C9;font-weight:700;min-width:70px;display:inline-block">[${msg.data.machineId||'SYS'}]</span> `+
-          `<span style="color:#98A9B9">${msg.data.message||''}</span>`;
+          `<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 140px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg.data.message||''}</span>`;
         logEl.appendChild(row);
         // 최대 200줄 유지
         while(logEl.children.length > 200) logEl.removeChild(logEl.firstChild);

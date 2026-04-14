@@ -5517,7 +5517,7 @@ function simCmd(target,code,param){
     ids.forEach(mid=>{
       const s=machSt[mid]; let resp='';
       if(code==='START'){s.status='WORKING';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
-      else if(code==='STOP'){s.status='READY';s.speed=0;resp='정지 완료';}
+      else if(code==='STOP'){s.status='STOPPED';s.speed=0;resp='정지 완료';}
       else if(code==='RESET'){s.status='READY';s.alarm=false;s.errorCode='';s.oee=0;s.speed=0;resp='리셋 완료';}
       else if(code==='STATUS'){resp=`STATUS:${s.status} OEE:${s.oee.toFixed(1)}% SPD:${Math.round(s.speed)}`;}
       else if(code==='SPEED'){s.speed=parseInt(param)||100;resp='속도 설정: '+s.speed;}
@@ -5756,8 +5756,26 @@ function renderCard(mid){
   }
 
   const effStatus = s.alarm ? 'ALARM' : s.status;
-  const stColor = {READY:'#73C59B',WORKING:'#6FB6C9',FINISH:'#CBAF6D',ALARM:'#D37489'}[effStatus] || '#72879E';
-  const stTxt   = {READY:'준비 완료',WORKING:'작업 중',FINISH:'가공 완료',ALARM:'알람'}[effStatus] || s.status;
+  const stColor = {
+    READY:'#73C59B',
+    WORKING:'#6FB6C9',
+    STOPPED:'#B7A7D9',
+    IDLE:'#B7A7D9',
+    WAIT:'#D1B672',
+    FINISH:'#CBAF6D',
+    ALARM:'#D37489',
+    FAULT:'#D37489'
+  }[effStatus] || '#72879E';
+  const stTxt   = {
+    READY:'준비 완료',
+    WORKING:'작업 중',
+    STOPPED:'정지됨',
+    IDLE:'대기',
+    WAIT:'대기 중',
+    FINISH:'가공 완료',
+    ALARM:'알람',
+    FAULT:'장애'
+  }[effStatus] || s.status;
 
   // 상태 dot
   const dot = document.getElementById('cdot_'+mid);
@@ -5786,11 +5804,26 @@ function renderCard(mid){
   const ipEl = document.getElementById('cip_'+mid); if(ipEl) ipEl.textContent = m.ip;
   const pEl  = document.getElementById('cport_'+mid); if(pEl) pEl.textContent = m.port;
   // 연결 상태
-  const connColor = s.ready?'var(--green)':s.connected?'var(--yellow)':'var(--red)';
-  const connText  = s.ready?'● Ready':s.connected?'● 연결됨 (준비 중)':'● 미연결';
+  const isDisconnected = !s.connected;
+  const isFault = s.alarm || effStatus === 'ALARM' || effStatus === 'FAULT';
+  const isRunning = effStatus === 'WORKING';
+  const isStopped = effStatus === 'STOPPED' || effStatus === 'IDLE';
+  const isReadyState = effStatus === 'READY' && s.ready;
+  const connColor = isDisconnected ? 'var(--red)'
+                 : isFault ? 'var(--red)'
+                 : isRunning ? 'var(--cyan)'
+                 : isStopped ? 'var(--purple)'
+                 : isReadyState ? 'var(--green)'
+                 : 'var(--yellow)';
+  const connText = isDisconnected ? '● 미연결'
+                : isFault ? '● 연결됨 (장애/알람)'
+                : isRunning ? '● 연결됨 (가동 중)'
+                : isStopped ? '● 연결됨 (정지/대기)'
+                : isReadyState ? '● 연결됨 (준비 완료)'
+                : '● 연결됨 (WAIT)';
   const cd = document.getElementById('cconndot_'+mid);
   const ct = document.getElementById('cconntxt_'+mid);
-  if(cd){ cd.style.background = connColor; cd.style.animation = s.ready?'dotBlink 1.5s infinite':'none'; }
+  if(cd){ cd.style.background = connColor; cd.style.animation = (isRunning || isReadyState)?'dotBlink 1.5s infinite':'none'; }
   if(ct){ ct.textContent = connText; ct.style.color = connColor; }
   // 메시지
   const msgEl = document.getElementById('cmsg_'+mid);
@@ -6849,7 +6882,7 @@ window.onCSharpMessage = function(msg){
         st.lastMsg = response;
         if(isOk){
           if(cmdType==='START') st.status='WORKING';
-          if(cmdType==='STOP')  st.status='READY';
+          if(cmdType==='STOP')  st.status='STOPPED';
           if(cmdType==='RESET'){st.status='READY'; st.alarm=false; st.errorCode='';}
         }
         if(isErr){ st.alarm = true; st.status='ALARM'; }

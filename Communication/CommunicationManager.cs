@@ -653,10 +653,17 @@ namespace PipeBendingDashboard.Communication
                             status.IsReady = false;
                             break;
                         case MachineCommandType.Stop:
+                            status.Status = "STOPPED";
+                            status.StateCode = "IDLE";
+                            status.IsReady = true;
+                            status.HasAlarm = false;
+                            status.ErrorCode = "";
+                            break;
                         case MachineCommandType.Reset:
                         case MachineCommandType.Abort:
                             status.Status = "READY";
                             status.StateCode = "READY";
+                            status.IsReady = true;
                             status.HasAlarm = false;
                             status.ErrorCode = "";
                             break;
@@ -870,6 +877,15 @@ namespace PipeBendingDashboard.Communication
                 status.Status = "FINISH";
                 status.StateCode = "DONE";
                 status.IsReady = false;
+                return;
+            }
+
+            // STOP 이후 READY 응답은 "연결 유지 + 정지 대기"로 유지
+            if (previous == "STOPPED" && parsed.Status == "READY")
+            {
+                status.Status = "STOPPED";
+                status.StateCode = "IDLE";
+                if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
                 return;
             }
 

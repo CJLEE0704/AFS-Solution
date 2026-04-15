@@ -134,59 +134,12 @@
       prevSig=sig;
     }
 
-    function runSimConcurrentTick(){
-      if(!lineState.processRunning) return;
-      const active = global.getActiveSteps?.() || [];
-      if(!active.length) return;
-      const entryStep = active[0];
-
-      active.forEach(s=>{
-        const slot = getSlots()?.[s];
-        if(slot) slot.remain -= 250;
-      });
-
-      for(let i=active.length-1;i>=0;i--){
-        const s=active[i];
-        const slot=getSlots()?.[s];
-        if(!slot || slot.remain>0) continue;
-
-        if(s===1 || s===6){
-          lineState.stageSlots = { ...getSlots(), [s]: null };
-          continue;
-        }
-
-        if(s===5){
-          const target = global.chooseReadyBending?.(active);
-          if(target){
-            { const slots=getSlots(); slots[target] = { pipeIdx: slot.pipeIdx, remain: global.pickStepDuration?.(target) || 2200 }; slots[s]=null; lineState.stageSlots=slots; }
-          }
-          continue;
-        }
-
-        const next = active[i+1];
-        if(global.canReceivePipe?.(next)){
-          { const slots=getSlots(); slots[next] = { pipeIdx: slot.pipeIdx, remain: global.pickStepDuration?.(next) || 2200 }; slots[s]=null; lineState.stageSlots=slots; }
-        }
-      }
-
-      if(global.canReceivePipe?.(entryStep) && (entryStep!==4 || (lineState.loaderBufferCount||0)>0)){
-        { const slots=getSlots(); slots[entryStep] = { pipeIdx: lineState.nextPipeFeedIdx, remain: global.pickStepDuration?.(entryStep) || 2200 }; lineState.stageSlots=slots; }
-        if(entryStep===4){
-          lineState.loaderBufferCount = Math.max(0, (lineState.loaderBufferCount||0)-1);
-          global.updateLoaderReadyVisual?.();
-          global.scheduleLoaderPrefetch?.();
-        }
-        lineState.nextPipeFeedIdx = ((lineState.nextPipeFeedIdx||0) + 1) % ((global.PIPE_DATA||[]).length || 1);
-      }
-
-      global.updatePipelineVisual?.();
-    }
-
     normalizeInitialPipeStates();
     const origRun=global.runPipelineTick;
     global.runPipelineTick=function(){
-      // 기존 라인 스케줄러를 우선 사용해 연속 생산성을 유지
-      const ret = lineState.simModeOn ? runSimConcurrentTick() : origRun?.apply(this,arguments);
+      // 파이프 시각 이동/Loader 주입은 index.html의 기존 runPipelineTick을 단일 진실원으로 사용
+      // (createTransitEvent / appendPipeTrace / updateViewersForPipe / setOpLog / scheduleLoaderPrefetch 복원)
+      const ret = origRun?.apply(this,arguments);
       // 보조 동기화: 선택된 프로젝트가 있으면 현재 선택 배관만 맞춘다(큐 소진 X)
       const p=nextPipeFromActiveProject();
       if(p && !lineState.processRunning){

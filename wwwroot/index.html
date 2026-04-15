@@ -3807,6 +3807,7 @@ let activeTransit = [];        // 현재 화면 오버레이에서 렌더링 중
 let transitByPipeId = {};      // pipeIdx -> 마지막 전이 정보
 let transitAnimRaf = null;
 let _transitSeq = 0;
+let _simRouteState = { configKey:'', route:[], stageMap:{} };
 
 // 외부 모듈(pipeline-engine)에서 충돌 없이 접근할 수 있도록 라인 상태 브리지 제공
 window.__lineState = {
@@ -3925,6 +3926,60 @@ function updatePipelineVisual(){
   updateBendingIndependentVisual();
 }
 
+function getSelectedMachineConfig(){
+  const cfg = getActiveConfig();
+  return {
+    id: cfg?.id || 'default',
+    title: cfg?.title || '',
+    machines: Array.isArray(cfg?.machines) ? cfg.machines.slice() : []
+  };
+}
+
+function buildVisibleMachineLayout(config){
+  return Array.isArray(config?.machines) ? config.machines.slice() : [];
+}
+
+function buildPipeRoute(config){
+  return buildVisibleMachineLayout(config);
+}
+
+function getRouteStageMap(config){
+  const route = buildPipeRoute(config);
+  const map = {};
+  route.forEach((stageId, idx)=>{ map[stageId] = idx; });
+  return map;
+}
+
+function _syncTransitWithRoute(routeMap){
+  const valid = new Set(Object.keys(routeMap).map(Number));
+  activeTransit = activeTransit.filter(t=>{
+    const okFrom = t.fromStep==null || valid.has(t.fromStep);
+    const okTo = valid.has(t.toStep);
+    return okFrom && okTo;
+  });
+  Object.keys(transitByPipeId).forEach(k=>{
+    const x = transitByPipeId[k];
+    if(!x) return;
+    const okFrom = x.fromStep==null || valid.has(x.fromStep);
+    const okTo = valid.has(x.toStep);
+    if(!okFrom || !okTo) delete transitByPipeId[k];
+  });
+}
+
+function refreshSimulationRouteModel(){
+  const config = getSelectedMachineConfig();
+  const route = buildPipeRoute(config);
+  const stageMap = getRouteStageMap(config);
+  const key = route.join('>');
+  const changed = _simRouteState.configKey !== key;
+  _simRouteState = { configKey:key, route, stageMap };
+  if(changed){
+    _syncTransitWithRoute(stageMap);
+    console.debug(`[SIM-ROUTE] 경로 갱신: ${key || '(empty)'}`);
+  }
+  return _simRouteState;
+}
+
 function pickDemoBendingTarget(active){
   const cands = active.filter(s=>s===1 || s===6);
   if(cands.length===0) return null;
@@ -3971,10 +4026,13 @@ function getTransitCenter(screenPathType, step, overlay){
 }
 
 function getTransitFromPoint(item, overlay){
-  if(item.fromStep){
-    return getTransitCenter(item.screenPathType, item.fromStep, overlay);
+  const route = _simRouteState.route || [];
+  const fromStep = item.fromRoutePos!=null ? route[item.fromRoutePos] : item.fromStep;
+  const toStep = item.toRoutePos!=null ? route[item.toRoutePos] : item.toStep;
+  if(fromStep){
+    return getTransitCenter(item.screenPathType, fromStep, overlay);
   }
-  const to = getTransitCenter(item.screenPathType, item.toStep, overlay);
+  const to = getTransitCenter(item.screenPathType, toStep, overlay);
   if(!to) return null;
   if(item.screenPathType==='operation-horizontal'){
     return {x: Math.max(8, to.x - 110), y: to.y};
@@ -3992,8 +4050,11 @@ function _drawTransitOverlay(overlayId, screenPathType){
   rows.forEach(item=>{
     const p = Math.max(0, Math.min(1, (now-item.startedAt)/item.durationMs));
     const eased = p<0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+    const route = _simRouteState.route || [];
+    const toStep = item.toRoutePos!=null ? route[item.toRoutePos] : item.toStep;
+    if(!toStep) return;
     const from = getTransitFromPoint(item, overlay);
-    const to = getTransitCenter(screenPathType, item.toStep, overlay);
+    const to = getTransitCenter(screenPathType, toStep, overlay);
     if(!from || !to) return;
     const x = from.x + (to.x-from.x)*eased;
     const y = from.y + (to.y-from.y)*eased;
@@ -4062,6 +4123,10 @@ function _ensureTransitLoop(){
 
 function createTransitEvent(pipeIdx, fromStep, toStep){
   if(!toStep) return;
+  const routeModel = refreshSimulationRouteModel();
+  const fromRoutePos = fromStep==null ? null : routeModel.stageMap[fromStep];
+  const toRoutePos = routeModel.stageMap[toStep];
+  if(toRoutePos==null) return;
   const durationMs = 900;
   const startedAt = Date.now();
   const base = {
@@ -4069,6 +4134,8 @@ function createTransitEvent(pipeIdx, fromStep, toStep){
     pipeIdx,
     fromStep: fromStep || null,
     toStep,
+    fromRoutePos,
+    toRoutePos,
     startedAt,
     durationMs
   };
@@ -4083,6 +4150,7 @@ function createTransitEvent(pipeIdx, fromStep, toStep){
 }
 
 function restoreSimulationVisualState(){
+  refreshSimulationRouteModel();
   ensureTransitOverlay('operationTransitOverlay','opMachGrid');
   ensureTransitOverlay('workerTransitOverlay','workerMachCol');
   if(processRunning){
@@ -4109,6 +4177,7 @@ function clearSimulationVisualState(){
 
 function runDemoSequenceTick(){
   if(!processRunning) return;
+  refreshSimulationRouteModel();
   const active = getActiveSteps();
   if(active.length===0) return;
 
@@ -4167,6 +4236,7 @@ function runDemoSequenceTick(){
 
 function runPipelineTick(){
   if(!processRunning) return;
+  refreshSimulationRouteModel();
   if(simModeOn){
     runDemoSequenceTick();
     return;
@@ -6803,7 +6873,6 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
   const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
   _machPipeAnimState[pipeId] = st;
   const isConfigured = activeSet ? activeSet.has(machIdx) : true;
-  const idleMode = activeStep===0;
 
   if(activeStep !== machIdx){
     if(st.active){
@@ -6815,17 +6884,6 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
       const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
       const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
       return;
-    }
-    if(idleMode && isConfigured){
-      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0) + 30);
-      let ghost=svg.querySelector('#'+pipeId);
-      if(!ghost){
-        ghost=buildWorkerStraightPipe(svg, pipeId, idleX);
-      }else{
-        ghost.setAttribute('transform',`translate(${idleX},0)`);
-      }
-      ghost.style.opacity='0.28';
-      ghost.style.filter='saturate(0.72)';
     }
     return;
   }

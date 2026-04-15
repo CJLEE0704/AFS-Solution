@@ -1241,24 +1241,24 @@ body::before{
     </div>
 
     <!-- MACHINE CARDS — 정적 고정 (initCommPage에서 재생성하지 않음) -->
-    <div id="machineCards" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;flex-shrink:0;overflow:visible">
-      <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
-      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px"></div>
+    <div id="machineCards" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex-shrink:0;min-width:0;overflow:hidden">
+      <div id="card_LOADER" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_CUTTING" class="mc-theme-card cutting" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_LASER" class="mc-theme-card laser" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_ROBOT" class="mc-theme-card loader" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_BENDING" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
+      <div id="card_BENDING2" class="mc-theme-card bending" style="position:relative;border-radius:8px;padding:10px;min-width:0;overflow:hidden"></div>
     </div>
 
     <!-- COMM LOG + COMMAND PANEL -->
-    <div style="flex:1;display:grid;grid-template-columns:1fr 320px;gap:8px;min-height:0;overflow:auto">
+    <div style="flex:1;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:8px;min-height:0;min-width:0;overflow:hidden">
       <!-- LOG -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;overflow:hidden;min-height:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-shrink:0">
           <div class="pt" style="margin-bottom:0">통신 로그</div>
           <button onclick="clearLog()" style="font-size:8.5px;color:var(--dim);background:transparent;border:none;cursor:pointer;padding:2px 6px">지우기</button>
         </div>
-        <div id="commLog" style="flex:1;overflow-y:auto;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
+        <div id="commLog" style="flex:1;overflow-y:auto;overflow-x:hidden;height:0;font-family:monospace;font-size:9.5px;line-height:1.7"></div>
       </div>
       <!-- COMMAND PANEL -->
       <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto">
@@ -2041,6 +2041,7 @@ function setMenu(id){
           if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
         }
       }
+      restoreSimulationVisualState();
     });
   } else if(id==='datacenter'){
     document.getElementById('dc-page').classList.add('show');
@@ -2065,6 +2066,7 @@ function setMenu(id){
     requestAnimationFrame(()=>{
       initWorkerPage();
       ensureWorkerPipeSelected();
+      restoreSimulationVisualState();
     });
   } else {
     document.getElementById('other-page').classList.add('show');
@@ -3361,6 +3363,7 @@ function applyConfigToOperation(){
 
   applyConfigToWorkerLayout(active);
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
+  restoreSimulationVisualState();
 }
 
 function applyConfigToWorkerLayout(active){
@@ -3799,6 +3802,12 @@ let stageSlots = {};      // { stepId: {pipeIdx, remain} | null }
 let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
 let demoActiveStep = null;
 let demoBendFlip = false;
+let visualTransitQueue = [];   // 최근 전이 이벤트 기록
+let activeTransit = [];        // 현재 화면 오버레이에서 렌더링 중인 전이
+let transitByPipeId = {};      // pipeIdx -> 마지막 전이 정보
+let transitAnimRaf = null;
+let _transitSeq = 0;
+let _simRouteState = { configKey:'', route:[], stageMap:{} };
 
 // 외부 모듈(pipeline-engine)에서 충돌 없이 접근할 수 있도록 라인 상태 브리지 제공
 window.__lineState = {
@@ -3917,6 +3926,60 @@ function updatePipelineVisual(){
   updateBendingIndependentVisual();
 }
 
+function getSelectedMachineConfig(){
+  const cfg = getActiveConfig();
+  return {
+    id: cfg?.id || 'default',
+    title: cfg?.title || '',
+    machines: Array.isArray(cfg?.machines) ? cfg.machines.slice() : []
+  };
+}
+
+function buildVisibleMachineLayout(config){
+  return Array.isArray(config?.machines) ? config.machines.slice() : [];
+}
+
+function buildPipeRoute(config){
+  return buildVisibleMachineLayout(config);
+}
+
+function getRouteStageMap(config){
+  const route = buildPipeRoute(config);
+  const map = {};
+  route.forEach((stageId, idx)=>{ map[stageId] = idx; });
+  return map;
+}
+
+function _syncTransitWithRoute(routeMap){
+  const valid = new Set(Object.keys(routeMap).map(Number));
+  activeTransit = activeTransit.filter(t=>{
+    const okFrom = t.fromStep==null || valid.has(t.fromStep);
+    const okTo = valid.has(t.toStep);
+    return okFrom && okTo;
+  });
+  Object.keys(transitByPipeId).forEach(k=>{
+    const x = transitByPipeId[k];
+    if(!x) return;
+    const okFrom = x.fromStep==null || valid.has(x.fromStep);
+    const okTo = valid.has(x.toStep);
+    if(!okFrom || !okTo) delete transitByPipeId[k];
+  });
+}
+
+function refreshSimulationRouteModel(){
+  const config = getSelectedMachineConfig();
+  const route = buildPipeRoute(config);
+  const stageMap = getRouteStageMap(config);
+  const key = route.join('>');
+  const changed = _simRouteState.configKey !== key;
+  _simRouteState = { configKey:key, route, stageMap };
+  if(changed){
+    _syncTransitWithRoute(stageMap);
+    console.debug(`[SIM-ROUTE] 경로 갱신: ${key || '(empty)'}`);
+  }
+  return _simRouteState;
+}
+
 function pickDemoBendingTarget(active){
   const cands = active.filter(s=>s===1 || s===6);
   if(cands.length===0) return null;
@@ -3925,8 +3988,196 @@ function pickDemoBendingTarget(active){
   return demoBendFlip ? 1 : 6;
 }
 
+function ensureTransitOverlay(overlayId, hostId){
+  const host = document.getElementById(hostId);
+  if(!host) return null;
+  if(getComputedStyle(host).position === 'static'){
+    host.style.position = 'relative';
+  }
+  let ov = document.getElementById(overlayId);
+  if(!ov){
+    const NS='http://www.w3.org/2000/svg';
+    ov = document.createElementNS(NS,'svg');
+    ov.id = overlayId;
+    ov.setAttribute('viewBox','0 0 100 100');
+    ov.style.position='absolute';
+    ov.style.inset='0';
+    ov.style.width='100%';
+    ov.style.height='100%';
+    ov.style.pointerEvents='none';
+    ov.style.overflow='visible';
+    ov.style.zIndex='8';
+    host.appendChild(ov);
+  }
+  return ov;
+}
+
+function getTransitCenter(screenPathType, step, overlay){
+  if(!overlay || !step) return null;
+  const hostRect = overlay.getBoundingClientRect();
+  const cardId = screenPathType==='operation-horizontal' ? 'opMachWrap'+step : 'wMach'+step;
+  const card = document.getElementById(cardId);
+  if(!card || card.style.display==='none') return null;
+  const r = card.getBoundingClientRect();
+  return {
+    x: (r.left + r.width/2) - hostRect.left,
+    y: (r.top + r.height/2) - hostRect.top
+  };
+}
+
+function getTransitFromPoint(item, overlay){
+  const route = _simRouteState.route || [];
+  const fromStep = item.fromRoutePos!=null ? route[item.fromRoutePos] : item.fromStep;
+  const toStep = item.toRoutePos!=null ? route[item.toRoutePos] : item.toStep;
+  if(fromStep){
+    return getTransitCenter(item.screenPathType, fromStep, overlay);
+  }
+  const to = getTransitCenter(item.screenPathType, toStep, overlay);
+  if(!to) return null;
+  if(item.screenPathType==='operation-horizontal'){
+    return {x: Math.max(8, to.x - 110), y: to.y};
+  }
+  return {x: to.x, y: Math.max(8, to.y - 110)};
+}
+
+function _drawTransitOverlay(overlayId, screenPathType){
+  const overlay = document.getElementById(overlayId);
+  if(!overlay) return;
+  overlay.innerHTML='';
+  const now = Date.now();
+  const rows = activeTransit.filter(t=>t.screenPathType===screenPathType);
+  const NS='http://www.w3.org/2000/svg';
+  rows.forEach(item=>{
+    const p = Math.max(0, Math.min(1, (now-item.startedAt)/item.durationMs));
+    const eased = p<0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+    const route = _simRouteState.route || [];
+    const toStep = item.toRoutePos!=null ? route[item.toRoutePos] : item.toStep;
+    if(!toStep) return;
+    const from = getTransitFromPoint(item, overlay);
+    const to = getTransitCenter(screenPathType, toStep, overlay);
+    if(!from || !to) return;
+    const x = from.x + (to.x-from.x)*eased;
+    const y = from.y + (to.y-from.y)*eased;
+
+    const guide = document.createElementNS(NS,'line');
+    guide.setAttribute('x1', String(from.x));
+    guide.setAttribute('y1', String(from.y));
+    guide.setAttribute('x2', String(to.x));
+    guide.setAttribute('y2', String(to.y));
+    guide.setAttribute('stroke', 'rgba(111,182,201,0.30)');
+    guide.setAttribute('stroke-width', '2');
+    guide.setAttribute('stroke-dasharray', '5 4');
+    overlay.appendChild(guide);
+
+    const body = document.createElementNS(NS,'rect');
+    body.setAttribute('x', String(x-20));
+    body.setAttribute('y', String(y-6));
+    body.setAttribute('width', '40');
+    body.setAttribute('height', '12');
+    body.setAttribute('rx', '6');
+    body.setAttribute('fill', 'rgba(231,238,242,0.95)');
+    body.setAttribute('stroke', 'rgba(64,80,94,0.9)');
+    body.setAttribute('stroke-width', '1.2');
+    overlay.appendChild(body);
+  });
+}
+
+function renderOperationTransitOverlay(){
+  ensureTransitOverlay('operationTransitOverlay','opMachGrid');
+  _drawTransitOverlay('operationTransitOverlay','operation-horizontal');
+}
+
+function renderWorkerTransitOverlay(){
+  ensureTransitOverlay('workerTransitOverlay','workerMachCol');
+  _drawTransitOverlay('workerTransitOverlay','worker-vertical');
+}
+
+function _tickTransitAnimation(){
+  transitAnimRaf = null;
+  if(activeTransit.length===0){
+    renderOperationTransitOverlay();
+    renderWorkerTransitOverlay();
+    return;
+  }
+  const now = Date.now();
+  const done = [];
+  activeTransit = activeTransit.filter(t=>{
+    const fin = (now - t.startedAt) >= t.durationMs;
+    if(fin) done.push(t);
+    return !fin;
+  });
+  done.forEach(t=>{
+    console.debug(`[SIM-TRANSIT] 완료 pipe=${t.pipeIdx} ${t.fromStep ?? 'ENTRY'}→${t.toStep} (${t.screenPathType})`);
+  });
+  renderOperationTransitOverlay();
+  renderWorkerTransitOverlay();
+  if(activeTransit.length>0){
+    transitAnimRaf = requestAnimationFrame(_tickTransitAnimation);
+  }
+}
+
+function _ensureTransitLoop(){
+  if(transitAnimRaf!=null) return;
+  transitAnimRaf = requestAnimationFrame(_tickTransitAnimation);
+}
+
+function createTransitEvent(pipeIdx, fromStep, toStep){
+  if(!toStep) return;
+  const routeModel = refreshSimulationRouteModel();
+  const fromRoutePos = fromStep==null ? null : routeModel.stageMap[fromStep];
+  const toRoutePos = routeModel.stageMap[toStep];
+  if(toRoutePos==null) return;
+  const durationMs = 900;
+  const startedAt = Date.now();
+  const base = {
+    eventId: ++_transitSeq,
+    pipeIdx,
+    fromStep: fromStep || null,
+    toStep,
+    fromRoutePos,
+    toRoutePos,
+    startedAt,
+    durationMs
+  };
+  const opItem = {...base, screenPathType:'operation-horizontal'};
+  const wkItem = {...base, screenPathType:'worker-vertical'};
+  activeTransit.push(opItem, wkItem);
+  visualTransitQueue.push(base);
+  if(visualTransitQueue.length>80) visualTransitQueue.shift();
+  transitByPipeId[pipeIdx] = {fromStep:base.fromStep, toStep:base.toStep, startedAt:base.startedAt};
+  console.debug(`[SIM-TRANSIT] 생성 pipe=${pipeIdx} ${fromStep ?? 'ENTRY'}→${toStep}`);
+  _ensureTransitLoop();
+}
+
+function restoreSimulationVisualState(){
+  refreshSimulationRouteModel();
+  ensureTransitOverlay('operationTransitOverlay','opMachGrid');
+  ensureTransitOverlay('workerTransitOverlay','workerMachCol');
+  if(processRunning){
+    updateWorkerMachines(currentStep, stageSlots);
+    console.debug('[SIM-TRANSIT] 화면 복원: stageSlots + activeTransit 적용');
+  }
+  renderOperationTransitOverlay();
+  renderWorkerTransitOverlay();
+  if(activeTransit.length>0) _ensureTransitLoop();
+}
+
+function clearSimulationVisualState(){
+  activeTransit = [];
+  visualTransitQueue = [];
+  transitByPipeId = {};
+  if(transitAnimRaf!=null){
+    cancelAnimationFrame(transitAnimRaf);
+    transitAnimRaf = null;
+  }
+  const op = document.getElementById('operationTransitOverlay'); if(op) op.innerHTML='';
+  const wk = document.getElementById('workerTransitOverlay'); if(wk) wk.innerHTML='';
+  console.debug('[SIM-TRANSIT] 상태 초기화');
+}
+
 function runDemoSequenceTick(){
   if(!processRunning) return;
+  refreshSimulationRouteModel();
   const active = getActiveSteps();
   if(active.length===0) return;
 
@@ -3939,6 +4190,7 @@ function runDemoSequenceTick(){
     const entry = active[0];
     const pipeIdx = nextPipeFeedIdx;
     stageSlots[entry] = { pipeIdx, remain: pickStepDuration(entry) };
+    createTransitEvent(pipeIdx, null, entry);
     demoActiveStep = entry;
     updateViewersForPipe(pipeIdx);
     appendPipeTrace(pipeIdx, `${stageName(entry)} 투입`);
@@ -3964,6 +4216,7 @@ function runDemoSequenceTick(){
   if(next){
     stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
     stageSlots[curr] = null;
+    createTransitEvent(slot.pipeIdx, curr, next);
     demoActiveStep = next;
     appendPipeTrace(slot.pipeIdx, `${stageName(curr)}→${stageName(next)}`);
     setOpLog(`↪ [SIM] ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: ${stageName(curr)} → ${stageName(next)}${formatPipeTrace(slot.pipeIdx)}`);
@@ -3983,6 +4236,7 @@ function runDemoSequenceTick(){
 
 function runPipelineTick(){
   if(!processRunning) return;
+  refreshSimulationRouteModel();
   if(simModeOn){
     runDemoSequenceTick();
     return;
@@ -4020,6 +4274,7 @@ function runPipelineTick(){
       if(target){
         stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
+        createTransitEvent(slot.pipeIdx, s, target);
         slot.holdReason = '';
         appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
         setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}${formatPipeTrace(slot.pipeIdx)}`);
@@ -4048,6 +4303,7 @@ function runPipelineTick(){
     const next = active[i+1];
     if(canReceivePipe(next)){
       stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
+      createTransitEvent(slot.pipeIdx, s, next);
       appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
       slot.holdReason = '';
       stageSlots[s] = null;
@@ -4063,6 +4319,7 @@ function runPipelineTick(){
   // 3) Loader 투입 (지속 공급)
   if(canReceivePipe(entryStep) && (entryStep!==4 || loaderBufferCount>0)){
     stageSlots[entryStep] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(entryStep) };
+    createTransitEvent(nextPipeFeedIdx, null, entryStep);
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
     appendPipeTrace(nextPipeFeedIdx, `${stageName(entryStep)} 투입`);
     setOpLog(`📥 ${stageName(entryStep)} 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
@@ -4118,6 +4375,7 @@ function handleStart(){
     PIPE_TRACE.clear();
     stopPipelineMode();
     updateLoaderReadyVisual();
+    clearSimulationVisualState();
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -4141,6 +4399,7 @@ function handleStart(){
     stopLoaderPrefetch();
     startPipelineMode(opPipeIdx);
     updateLoaderReadyVisual();
+    restoreSimulationVisualState();
   }
 }
 
@@ -4281,6 +4540,7 @@ function handleEmergency(){
   loaderBufferCount = 0;
   updateLoaderReadyVisual();
   stopPipelineMode();
+  clearSimulationVisualState();
   syncRunningLock(false);  // ← 비상 정지 시 잠금 해제
 }
 
@@ -5517,7 +5777,7 @@ function simCmd(target,code,param){
     ids.forEach(mid=>{
       const s=machSt[mid]; let resp='';
       if(code==='START'){s.status='WORKING';s.oee=s.oee||80;s.speed=100;resp='가동 시작 완료';}
-      else if(code==='STOP'){s.status='READY';s.speed=0;resp='정지 완료';}
+      else if(code==='STOP'){s.status='STOPPED';s.speed=0;resp='정지 완료';}
       else if(code==='RESET'){s.status='READY';s.alarm=false;s.errorCode='';s.oee=0;s.speed=0;resp='리셋 완료';}
       else if(code==='STATUS'){resp=`STATUS:${s.status} OEE:${s.oee.toFixed(1)}% SPD:${Math.round(s.speed)}`;}
       else if(code==='SPEED'){s.speed=parseInt(param)||100;resp='속도 설정: '+s.speed;}
@@ -5636,11 +5896,11 @@ function clog(src,type,msg,col){
   const t=new Date().toLocaleTimeString('ko-KR',{hour12:false});
   const tCol={SEND:'#B79A5F',RECV:'#6FB58A',ERROR:'#B86A77',CONNECTED:'#6FB58A',CLOSED:'#B79A5F'}[type]||col||'#6FB6C9';
   const row=document.createElement('div');
-  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+  row.style.cssText='border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
   row.innerHTML=`<span style="color:#637183">${t}</span> `
     +`<span style="color:${tCol};font-weight:700;min-width:50px;display:inline-block">[${type}]</span> `
     +`<span style="color:#6FB6C9;font-weight:700;min-width:58px;display:inline-block">${src}</span> `
-    +`<span style="color:#98A9B9">${msg}</span>`;
+    +`<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 180px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg}</span>`;
   el.appendChild(row);
   // 최대 200줄 유지
   while(el.children.length>200)el.removeChild(el.firstChild);
@@ -5687,9 +5947,10 @@ function _buildCard(mid){
         '</div>'+
       '</div>'+
       '<div style="display:flex;gap:6px">'+
-        '<button id="capply_'+mid+'" style="flex:1;padding:6px;border-radius:5px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#183345,#69B8D6);border:1px solid #69B8D6;color:#fff;cursor:pointer">✔ 저장 및 적용</button>'+
+        '<button id="capply_'+mid+'" style="flex:1;padding:6px;border-radius:5px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#183345,#69B8D6);border:1px solid #69B8D6;color:#fff;cursor:pointer">✔ 변경 저장/적용</button>'+
         '<button id="creset_'+mid+'" style="padding:6px 12px;border-radius:5px;font-size:10px;font-weight:700;background:var(--panel);border:1px solid var(--border2);color:var(--dim);cursor:pointer">초기화</button>'+
       '</div>'+
+      '<div style="margin-top:6px;font-size:9px;color:var(--dim);line-height:1.45">※ 평상시에는 자동 연결/자동 재연결됩니다. IP/Port를 변경했을 때만 적용 버튼을 누르세요.</div>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px">'+
       '<div style="background:var(--sb);border-radius:5px;padding:5px;text-align:center">'+
@@ -5705,7 +5966,7 @@ function _buildCard(mid){
         '<div id="calm_'+mid+'" style="font-size:15px;font-weight:700;color:var(--dim)">—</div>'+
       '</div>'+
     '</div>'+
-    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 7px;background:var(--sb);border-radius:4px;border:1px solid var(--border)">'+
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:4px 7px;background:var(--sb);border-radius:4px;border:1px solid var(--border);min-width:0;overflow:hidden">'+
       '<span style="font-size:9px;color:var(--dim)">🌐</span>'+
       '<span id="cip_'+mid+'" style="font-size:10px;font-family:monospace;color:var(--cyan);font-weight:700">'+m.ip+'</span>'+
       '<span style="font-size:9px;color:var(--dim)">:</span>'+
@@ -5716,7 +5977,7 @@ function _buildCard(mid){
         '<span id="cconntxt_'+mid+'" style="font-size:8.5px;font-weight:700;color:var(--red)">● 미연결</span>'+
       '</div>'+
     '</div>'+
-    '<div id="cmsg_'+mid+'" style="font-size:9px;color:var(--text);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:7px">—</div>'+
+    '<div id="cmsg_'+mid+'" style="font-size:9px;color:var(--text);font-family:monospace;display:block;width:100%;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:7px" title="—">—</div>'+
     '<div style="display:flex;gap:4px">'+
       '<button id="cbtn_start_'+mid+'"  style="flex:1;padding:5px;border-radius:4px;font-size:9.5px;font-weight:700;border:1px solid var(--green)44;background:var(--gg);color:var(--green);cursor:pointer">START</button>'+
       '<button id="cbtn_stop_'+mid+'"   style="flex:1;padding:5px;border-radius:4px;font-size:9.5px;font-weight:700;border:1px solid var(--red)44;background:var(--rg);color:var(--red);cursor:pointer">STOP</button>'+
@@ -5755,8 +6016,26 @@ function renderCard(mid){
   }
 
   const effStatus = s.alarm ? 'ALARM' : s.status;
-  const stColor = {READY:'#73C59B',WORKING:'#6FB6C9',FINISH:'#CBAF6D',ALARM:'#D37489'}[effStatus] || '#72879E';
-  const stTxt   = {READY:'준비 완료',WORKING:'작업 중',FINISH:'가공 완료',ALARM:'알람'}[effStatus] || s.status;
+  const stColor = {
+    READY:'#73C59B',
+    WORKING:'#6FB6C9',
+    STOPPED:'#B7A7D9',
+    IDLE:'#B7A7D9',
+    WAIT:'#D1B672',
+    FINISH:'#CBAF6D',
+    ALARM:'#D37489',
+    FAULT:'#D37489'
+  }[effStatus] || '#72879E';
+  const stTxt   = {
+    READY:'준비 완료',
+    WORKING:'작업 중',
+    STOPPED:'정지됨',
+    IDLE:'대기',
+    WAIT:'대기 중',
+    FINISH:'가공 완료',
+    ALARM:'알람',
+    FAULT:'장애'
+  }[effStatus] || s.status;
 
   // 상태 dot
   const dot = document.getElementById('cdot_'+mid);
@@ -5785,15 +6064,34 @@ function renderCard(mid){
   const ipEl = document.getElementById('cip_'+mid); if(ipEl) ipEl.textContent = m.ip;
   const pEl  = document.getElementById('cport_'+mid); if(pEl) pEl.textContent = m.port;
   // 연결 상태
-  const connColor = s.ready?'var(--green)':s.connected?'var(--yellow)':'var(--red)';
-  const connText  = s.ready?'● Ready':s.connected?'● 연결됨 (준비 중)':'● 미연결';
+  const isDisconnected = !s.connected;
+  const isFault = s.alarm || effStatus === 'ALARM' || effStatus === 'FAULT';
+  const isRunning = effStatus === 'WORKING';
+  const isStopped = effStatus === 'STOPPED' || effStatus === 'IDLE';
+  const isReadyState = effStatus === 'READY' && s.ready;
+  const connColor = isDisconnected ? 'var(--red)'
+                 : isFault ? 'var(--red)'
+                 : isRunning ? 'var(--cyan)'
+                 : isStopped ? 'var(--purple)'
+                 : isReadyState ? 'var(--green)'
+                 : 'var(--yellow)';
+  const connText = isDisconnected ? '● 미연결'
+                : isFault ? '● 연결됨 (장애/알람)'
+                : isRunning ? '● 연결됨 (가동 중)'
+                : isStopped ? '● 연결됨 (정지/대기)'
+                : isReadyState ? '● 연결됨 (준비 완료)'
+                : '● 연결됨 (WAIT)';
   const cd = document.getElementById('cconndot_'+mid);
   const ct = document.getElementById('cconntxt_'+mid);
-  if(cd){ cd.style.background = connColor; cd.style.animation = s.ready?'dotBlink 1.5s infinite':'none'; }
+  if(cd){ cd.style.background = connColor; cd.style.animation = (isRunning || isReadyState)?'dotBlink 1.5s infinite':'none'; }
   if(ct){ ct.textContent = connText; ct.style.color = connColor; }
   // 메시지
   const msgEl = document.getElementById('cmsg_'+mid);
-  if(msgEl) msgEl.textContent = s.lastMsg || '—';
+  if(msgEl){
+    const fullMsg = s.lastMsg || '—';
+    msgEl.textContent = fullMsg;
+    msgEl.title = fullMsg;
+  }
 }
 
 // ── 설정 패널 토글 — display만 변경, innerHTML 절대 건드리지 않음 ──
@@ -5842,7 +6140,7 @@ function applyCardSettings(mid){
   _cardEditing[mid] = false;   // 편집창 닫기
   renderCard(mid);
 
-  clog('SYS','OK','['+mid+'] 설정 저장 — IP: '+newIp+', Port: '+newPort,'var(--green)');
+  clog('SYS','OK','['+mid+'] 설정 변경 저장/적용 — IP: '+newIp+', Port: '+newPort,'var(--green)');
 }
 
 // ── 공장 초기값으로 완전 초기화 (MACHINES_DEFAULT 기준) ──
@@ -5882,8 +6180,8 @@ function _applyConfigToCommNow(){
 
   const grid = document.getElementById('machineCards');
   if(grid){
-    // 6개 카드 표시
-    grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    // 런타임 레이아웃 갱신 시에도 카드 내용이 컬럼 폭을 밀어내지 않도록 minmax 적용
+    grid.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
   }
 
   // ── 각 카드: 활성/비활성 시각 처리 ──
@@ -6348,8 +6646,12 @@ function initWorkerPage(){
   workerFilter='all';
   _renderWorkerFilterBtns();
   renderWorkerPipeList();
-  // 머신 비활성 초기화
-  updateWorkerMachines(0);
+  // 가동 중이면 현재 시각 상태 복원, 아니면 대기 상태 초기화
+  if(processRunning){
+    updateWorkerMachines(currentStep, stageSlots);
+  }else{
+    updateWorkerMachines(0);
+  }
   // 첫 배관 자동 선택
   if(!workerSel && PIPE_DATA.length){
     selWorkerPipe(PIPE_DATA[0].id);
@@ -6571,7 +6873,6 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
   const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
   _machPipeAnimState[pipeId] = st;
   const isConfigured = activeSet ? activeSet.has(machIdx) : true;
-  const idleMode = activeStep===0;
 
   if(activeStep !== machIdx){
     if(st.active){
@@ -6583,17 +6884,6 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
       const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
       const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
       return;
-    }
-    if(idleMode && isConfigured){
-      const idleX = PIPE_DWELL[machIdx] || (({1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0) + 30);
-      let ghost=svg.querySelector('#'+pipeId);
-      if(!ghost){
-        ghost=buildWorkerStraightPipe(svg, pipeId, idleX);
-      }else{
-        ghost.setAttribute('transform',`translate(${idleX},0)`);
-      }
-      ghost.style.opacity='0.28';
-      ghost.style.filter='saturate(0.72)';
     }
     return;
   }
@@ -6802,11 +7092,11 @@ window.onCSharpMessage = function(msg){
       if(logEl){
         const t = new Date().toLocaleTimeString('ko-KR',{hour12:false});
         const row = document.createElement('div');
-        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0';
+        row.style.cssText = 'border-bottom:1px solid rgba(48,54,74,.25);padding:2px 0;overflow:hidden';
         row.innerHTML =
           `<span style="color:#637183">${t}</span> `+
           `<span style="color:#6FB6C9;font-weight:700;min-width:70px;display:inline-block">[${msg.data.machineId||'SYS'}]</span> `+
-          `<span style="color:#98A9B9">${msg.data.message||''}</span>`;
+          `<span style="color:#98A9B9;display:inline-block;max-width:calc(100% - 140px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${msg.data.message||''}</span>`;
         logEl.appendChild(row);
         // 최대 200줄 유지
         while(logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
@@ -6848,7 +7138,7 @@ window.onCSharpMessage = function(msg){
         st.lastMsg = response;
         if(isOk){
           if(cmdType==='START') st.status='WORKING';
-          if(cmdType==='STOP')  st.status='READY';
+          if(cmdType==='STOP')  st.status='STOPPED';
           if(cmdType==='RESET'){st.status='READY'; st.alarm=false; st.errorCode='';}
         }
         if(isErr){ st.alarm = true; st.status='ALARM'; }

@@ -57,6 +57,11 @@ namespace PipeBendingDashboard.Communication
         public ParsedMachineStatus ParseStatus(string response) => MachineProtocol.ParseStatusResponse(response);
         public string? EncodeRequest(MachineCommandRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.CommandCode))
+            {
+                request.CommandCode = request.CommandType.ToString().ToUpperInvariant();
+            }
+
             var key = request.CommandType.ToString().ToUpperInvariant();
             var legacy = ResolveCommand(key);
             if (!string.IsNullOrWhiteSpace(legacy)) return legacy;
@@ -74,6 +79,7 @@ namespace PipeBendingDashboard.Communication
                 MachineCommandType.BendingJob   => BuildInternalFrame("BENDING_JOB", request),
                 MachineCommandType.MoveTransfer => BuildInternalFrame("ROBOT_TRANSFER", request),
                 MachineCommandType.Abort        => BuildInternalFrame("ABORT", request),
+                MachineCommandType.EmergencyStop=> BuildInternalFrame("E_STOP", request),
                 MachineCommandType.Custom       => BuildInternalFrame("CUSTOM", request),
                 _ => null
             };
@@ -91,11 +97,11 @@ namespace PipeBendingDashboard.Communication
             }
 
             // 내부 표준 프레임 (벤더 중립, 사전 검증/시뮬 용도)
-            // <PREFIX>:CMD=<CODE>;CID=<ID>;TS=<UTC>;PAYLOAD=<BASE64(JSON)>
+            // <PREFIX>:CMD=<CODE>;CID=<ID>;SEQ=<N>;TS=<UTC>;VER=<VERSION>;MPROF=<...>;VPROF=<...>;PAYLOAD=<BASE64(JSON)>
             var payloadB64 = string.IsNullOrWhiteSpace(payloadRaw)
                 ? ""
                 : Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadRaw));
-            var frame = $"{_wirePrefix}:CMD={commandCode};CID={request.CorrelationId};TS={request.RequestedAtUtc:O}";
+            var frame = $"{_wirePrefix}:CMD={commandCode};CID={request.CorrelationId};SEQ={request.SequenceNo};TS={request.RequestedAtUtc:O};VER={request.ProtocolVersion};MPROF={request.MachineProfile};VPROF={request.VendorProfile}";
             if (!string.IsNullOrWhiteSpace(payloadB64))
             {
                 frame += $";PAYLOAD={payloadB64}";

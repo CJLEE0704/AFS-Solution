@@ -44,6 +44,10 @@ namespace PipeBendingDashboard.Communication
         private readonly IReadOnlyDictionary<string, IMachineProtocolAdapter> _protocolAdapters;
         private LineTopology _topology = new(new[] { "LOADER", "CUTTING", "LASER", "ROBOT", "BENDING", "BENDING2" });
         private readonly Dictionary<string, string> _lastCorrelationByMachine = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTime> _lastReconnectAttemptUtc = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _reconnectingMachines = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _reconnectSync = new();
+        private readonly TimeSpan _reconnectCooldown = TimeSpan.FromSeconds(3);
         private bool _simulationMode = false;
 
         // ── 이벤트 ───────────────────────────────────────────────
@@ -387,6 +391,7 @@ namespace PipeBendingDashboard.Communication
                 status.HasAlarm = true;
                 status.ErrorCode = "NET_DISCONNECTED";
                 status.LastMessage = "연결 끊김";
+                _ = TryAutoReconnectAsync(status.MachineId);
                 return;
             }
             try
@@ -397,14 +402,15 @@ namespace PipeBendingDashboard.Communication
                     status.IsConnected = false;
                     status.IsReady = false;
                     status.Status = "FAULT";
-                status.StateCode = "FAULT";
+                    status.StateCode = "FAULT";
                     status.HasAlarm = true;
                     status.ErrorCode = "NET_NO_RESPONSE";
                     status.LastMessage = "응답 없음";
+                    _ = TryAutoReconnectAsync(status.MachineId);
                     return;
                 }
                 status.IsConnected  = true;
-                status.LastMessage  = response.Trim();
+                status.LastMessage  = SummarizeOperatorResponse(response.Trim());
                 var parsed = _protocolAdapters.TryGetValue(status.MachineId, out var adapter)
                     ? adapter.ParseStatus(response)
                     : MachineProtocol.ParseStatusResponse(response);
@@ -422,7 +428,52 @@ namespace PipeBendingDashboard.Communication
                 status.HasAlarm = true;
                 status.ErrorCode = "NET_EXCEPTION";
                 status.LastMessage = ex.Message;
+                _ = TryAutoReconnectAsync(status.MachineId);
             }
+        }
+
+        private Task TryAutoReconnectAsync(string machineId)
+        {
+            var id = machineId.ToUpperInvariant();
+            if (!_activeMachineIds.Contains(id)) return Task.CompletedTask;
+
+            lock (_reconnectSync)
+            {
+                if (_reconnectingMachines.Contains(id)) return Task.CompletedTask;
+                if (_lastReconnectAttemptUtc.TryGetValue(id, out var lastAt)
+                    && DateTime.UtcNow - lastAt < _reconnectCooldown)
+                {
+                    return Task.CompletedTask;
+                }
+                _lastReconnectAttemptUtc[id] = DateTime.UtcNow;
+                _reconnectingMachines.Add(id);
+            }
+
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    var client = GetClient(id);
+                    var status = GetStatus(id);
+                    if (client == null || status == null) return;
+                    if (client.IsConnected) return;
+
+                    LogAdded?.Invoke(id, $"[{id}] 자동 재연결 시도...");
+                    await ConnectOneAsync(client, status);
+                    NotifyStatusUpdate();
+                }
+                catch (Exception ex)
+                {
+                    LogAdded?.Invoke(id, $"[{id}] 자동 재연결 실패: {ex.Message}");
+                }
+                finally
+                {
+                    lock (_reconnectSync)
+                    {
+                        _reconnectingMachines.Remove(id);
+                    }
+                }
+            });
         }
 
         // ══════════════════════════════════════════════════════════
@@ -538,7 +589,7 @@ namespace PipeBendingDashboard.Communication
                     return;
                 }
 
-                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] → 전송: {cmdType} ({protocol.Trim()})");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] → 전송: {cmdType}");
 
                 // ── 명령 전송 + 장비 ACK 응답 수신 ─────────────────
                 var response = await client.SendReceiveStringAsync(protocol);
@@ -562,7 +613,7 @@ namespace PipeBendingDashboard.Communication
                 }
 
                 var ack = response.Trim();
-                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← ACK: {ack}");
+                LogAdded?.Invoke(request.TargetMachineId, $"[{request.TargetMachineId}] ← 응답: {SummarizeOperatorResponse(ack)}");
                 var structured = adapter.DecodeResponse(request, ack);
                 if (!string.IsNullOrWhiteSpace(structured.CorrelationId)
                     && !string.Equals(structured.CorrelationId, request.CorrelationId, StringComparison.OrdinalIgnoreCase))
@@ -577,6 +628,7 @@ namespace PipeBendingDashboard.Communication
                 status.LastMessage = ack;
                 if (structured.ResponseType == MachineResponseType.Alarm
                     || structured.ResponseType == MachineResponseType.Fault
+                    || structured.ResponseType == MachineResponseType.Offline
                     || structured.ResponseType == MachineResponseType.EmergencyStop
                     || structured.ResponseType == MachineResponseType.Rejected
                     || structured.ResponseType == MachineResponseType.Error)
@@ -602,10 +654,24 @@ namespace PipeBendingDashboard.Communication
                             status.IsReady = false;
                             break;
                         case MachineCommandType.Stop:
+                            status.Status = "STOPPED";
+                            status.StateCode = "IDLE";
+                            status.IsReady = true;
+                            status.HasAlarm = false;
+                            status.ErrorCode = "";
+                            break;
+                        case MachineCommandType.EmergencyStop:
+                            status.Status = "FAULT";
+                            status.StateCode = "ESTOP";
+                            status.IsReady = false;
+                            status.HasAlarm = true;
+                            status.ErrorCode = "EMERGENCY_STOP";
+                            break;
                         case MachineCommandType.Reset:
                         case MachineCommandType.Abort:
                             status.Status = "READY";
                             status.StateCode = "READY";
+                            status.IsReady = true;
                             status.HasAlarm = false;
                             status.ErrorCode = "";
                             break;
@@ -640,6 +706,13 @@ namespace PipeBendingDashboard.Communication
                 status.IsReady = false;
                 status.HasAlarm = true;
                 status.ErrorCode = "NET_DISCONNECTED";
+                status.LastMessage = "연결 끊김";
+                _ = TryAutoReconnectAsync(machineId);
+            }
+            else
+            {
+                status.HasAlarm = false;
+                status.ErrorCode = "";
             }
             NotifyStatusUpdate();
         }
@@ -688,6 +761,20 @@ namespace PipeBendingDashboard.Communication
             var end  = rest.IndexOfAny(new[] { ',', '\r', '\n', ' ' });
             var num  = end < 0 ? rest : rest[..end];
             return double.TryParse(num, out value);
+        }
+
+        private static string SummarizeOperatorResponse(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return "(빈 응답)";
+            var upper = raw.Trim().ToUpperInvariant();
+            if (upper.StartsWith("OK")) return "OK";
+            if (upper.StartsWith("ERROR") || upper.StartsWith("FAIL") || upper.StartsWith("NACK")) return "ERROR";
+            if (upper.Contains("EMERGENCY_STOP") || upper.Contains("ESTOP")) return "EMERGENCY_STOP";
+            if (upper.Contains("ALARM") || upper.Contains("FAULT")) return "ALARM/FAULT";
+            if (upper.Contains("COMPLETE") || upper.Contains("FINISH") || upper.Contains("DONE")) return "COMPLETE";
+            if (upper.Contains("WORKING") || upper.Contains("RUNNING") || upper.Contains("IN_PROGRESS")) return "IN_PROGRESS";
+            if (upper.Contains("READY")) return "READY";
+            return raw.Length > 64 ? raw[..64] + "..." : raw;
         }
 
         private async Task HandleAllTargetAsync(WebCommand cmd)
@@ -812,6 +899,15 @@ namespace PipeBendingDashboard.Communication
                 status.Status = "FINISH";
                 status.StateCode = "DONE";
                 status.IsReady = false;
+                return;
+            }
+
+            // STOP 이후 READY 응답은 "연결 유지 + 정지 대기"로 유지
+            if (previous == "STOPPED" && parsed.Status == "READY")
+            {
+                status.Status = "STOPPED";
+                status.StateCode = "IDLE";
+                if (parsed.IsReady.HasValue) status.IsReady = parsed.IsReady.Value;
                 return;
             }
 
@@ -956,9 +1052,15 @@ namespace PipeBendingDashboard.Communication
 
             request.TargetMachineId = target;
             request.CommandType = mappedType;
+            request.CommandCode = string.IsNullOrWhiteSpace(rawType) ? mappedType.ToString().ToUpperInvariant() : rawType.Trim().ToUpperInvariant();
             request.CorrelationId = string.IsNullOrWhiteSpace(cmd.CorrelationId) ? Guid.NewGuid().ToString("N") : cmd.CorrelationId.Trim();
             request.RequestedAtUtc = DateTime.TryParse(cmd.Timestamp, out var ts) ? ts.ToUniversalTime() : DateTime.UtcNow;
             request.Payload = ParsePayload(cmd.Data);
+            request.Payload.TargetMachine = request.TargetMachineId;
+            if (request.Payload.Fields.TryGetValue("jobId", out var jobId)) request.Payload.JobId = jobId;
+            if (request.Payload.Fields.TryGetValue("pipeId", out var pipeId)) request.Payload.PipeId = pipeId;
+            if (request.Payload.Fields.TryGetValue("stage", out var stage)) request.Payload.Stage = stage;
+            if (request.Payload.Fields.TryGetValue("targetMachine", out var targetMachine)) request.Payload.TargetMachine = targetMachine;
             return true;
         }
 
@@ -990,6 +1092,10 @@ namespace PipeBendingDashboard.Communication
             {
                 case "START": commandType = MachineCommandType.Start; return true;
                 case "STOP": commandType = MachineCommandType.Stop; return true;
+                case "E_STOP":
+                case "ESTOP":
+                case "EMERGENCY_STOP":
+                    commandType = MachineCommandType.EmergencyStop; return true;
                 case "STATUS": commandType = MachineCommandType.Status; return true;
                 case "RESET": commandType = MachineCommandType.Reset; return true;
                 case "READY": case "READY?": commandType = MachineCommandType.Ready; return true;

@@ -2041,6 +2041,7 @@ function setMenu(id){
           if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
         }
       }
+      restoreSimulationVisualState();
     });
   } else if(id==='datacenter'){
     document.getElementById('dc-page').classList.add('show');
@@ -2065,6 +2066,7 @@ function setMenu(id){
     requestAnimationFrame(()=>{
       initWorkerPage();
       ensureWorkerPipeSelected();
+      restoreSimulationVisualState();
     });
   } else {
     document.getElementById('other-page').classList.add('show');
@@ -3361,6 +3363,7 @@ function applyConfigToOperation(){
 
   applyConfigToWorkerLayout(active);
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
+  restoreSimulationVisualState();
 }
 
 function applyConfigToWorkerLayout(active){
@@ -3799,6 +3802,11 @@ let stageSlots = {};      // { stepId: {pipeIdx, remain} | null }
 let nextPipeFeedIdx = 0;  // Loader 투입 인덱스
 let demoActiveStep = null;
 let demoBendFlip = false;
+let visualTransitQueue = [];   // 최근 전이 이벤트 기록
+let activeTransit = [];        // 현재 화면 오버레이에서 렌더링 중인 전이
+let transitByPipeId = {};      // pipeIdx -> 마지막 전이 정보
+let transitAnimRaf = null;
+let _transitSeq = 0;
 
 // 외부 모듈(pipeline-engine)에서 충돌 없이 접근할 수 있도록 라인 상태 브리지 제공
 window.__lineState = {
@@ -3925,6 +3933,180 @@ function pickDemoBendingTarget(active){
   return demoBendFlip ? 1 : 6;
 }
 
+function ensureTransitOverlay(overlayId, hostId){
+  const host = document.getElementById(hostId);
+  if(!host) return null;
+  if(getComputedStyle(host).position === 'static'){
+    host.style.position = 'relative';
+  }
+  let ov = document.getElementById(overlayId);
+  if(!ov){
+    const NS='http://www.w3.org/2000/svg';
+    ov = document.createElementNS(NS,'svg');
+    ov.id = overlayId;
+    ov.setAttribute('viewBox','0 0 100 100');
+    ov.style.position='absolute';
+    ov.style.inset='0';
+    ov.style.width='100%';
+    ov.style.height='100%';
+    ov.style.pointerEvents='none';
+    ov.style.overflow='visible';
+    ov.style.zIndex='8';
+    host.appendChild(ov);
+  }
+  return ov;
+}
+
+function getTransitCenter(screenPathType, step, overlay){
+  if(!overlay || !step) return null;
+  const hostRect = overlay.getBoundingClientRect();
+  const cardId = screenPathType==='operation-horizontal' ? 'opMachWrap'+step : 'wMach'+step;
+  const card = document.getElementById(cardId);
+  if(!card || card.style.display==='none') return null;
+  const r = card.getBoundingClientRect();
+  return {
+    x: (r.left + r.width/2) - hostRect.left,
+    y: (r.top + r.height/2) - hostRect.top
+  };
+}
+
+function getTransitFromPoint(item, overlay){
+  if(item.fromStep){
+    return getTransitCenter(item.screenPathType, item.fromStep, overlay);
+  }
+  const to = getTransitCenter(item.screenPathType, item.toStep, overlay);
+  if(!to) return null;
+  if(item.screenPathType==='operation-horizontal'){
+    return {x: Math.max(8, to.x - 110), y: to.y};
+  }
+  return {x: to.x, y: Math.max(8, to.y - 110)};
+}
+
+function _drawTransitOverlay(overlayId, screenPathType){
+  const overlay = document.getElementById(overlayId);
+  if(!overlay) return;
+  overlay.innerHTML='';
+  const now = Date.now();
+  const rows = activeTransit.filter(t=>t.screenPathType===screenPathType);
+  const NS='http://www.w3.org/2000/svg';
+  rows.forEach(item=>{
+    const p = Math.max(0, Math.min(1, (now-item.startedAt)/item.durationMs));
+    const eased = p<0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;
+    const from = getTransitFromPoint(item, overlay);
+    const to = getTransitCenter(screenPathType, item.toStep, overlay);
+    if(!from || !to) return;
+    const x = from.x + (to.x-from.x)*eased;
+    const y = from.y + (to.y-from.y)*eased;
+
+    const guide = document.createElementNS(NS,'line');
+    guide.setAttribute('x1', String(from.x));
+    guide.setAttribute('y1', String(from.y));
+    guide.setAttribute('x2', String(to.x));
+    guide.setAttribute('y2', String(to.y));
+    guide.setAttribute('stroke', 'rgba(111,182,201,0.30)');
+    guide.setAttribute('stroke-width', '2');
+    guide.setAttribute('stroke-dasharray', '5 4');
+    overlay.appendChild(guide);
+
+    const body = document.createElementNS(NS,'rect');
+    body.setAttribute('x', String(x-20));
+    body.setAttribute('y', String(y-6));
+    body.setAttribute('width', '40');
+    body.setAttribute('height', '12');
+    body.setAttribute('rx', '6');
+    body.setAttribute('fill', 'rgba(231,238,242,0.95)');
+    body.setAttribute('stroke', 'rgba(64,80,94,0.9)');
+    body.setAttribute('stroke-width', '1.2');
+    overlay.appendChild(body);
+  });
+}
+
+function renderOperationTransitOverlay(){
+  ensureTransitOverlay('operationTransitOverlay','opMachGrid');
+  _drawTransitOverlay('operationTransitOverlay','operation-horizontal');
+}
+
+function renderWorkerTransitOverlay(){
+  ensureTransitOverlay('workerTransitOverlay','workerMachCol');
+  _drawTransitOverlay('workerTransitOverlay','worker-vertical');
+}
+
+function _tickTransitAnimation(){
+  transitAnimRaf = null;
+  if(activeTransit.length===0){
+    renderOperationTransitOverlay();
+    renderWorkerTransitOverlay();
+    return;
+  }
+  const now = Date.now();
+  const done = [];
+  activeTransit = activeTransit.filter(t=>{
+    const fin = (now - t.startedAt) >= t.durationMs;
+    if(fin) done.push(t);
+    return !fin;
+  });
+  done.forEach(t=>{
+    console.debug(`[SIM-TRANSIT] 완료 pipe=${t.pipeIdx} ${t.fromStep ?? 'ENTRY'}→${t.toStep} (${t.screenPathType})`);
+  });
+  renderOperationTransitOverlay();
+  renderWorkerTransitOverlay();
+  if(activeTransit.length>0){
+    transitAnimRaf = requestAnimationFrame(_tickTransitAnimation);
+  }
+}
+
+function _ensureTransitLoop(){
+  if(transitAnimRaf!=null) return;
+  transitAnimRaf = requestAnimationFrame(_tickTransitAnimation);
+}
+
+function createTransitEvent(pipeIdx, fromStep, toStep){
+  if(!toStep) return;
+  const durationMs = 900;
+  const startedAt = Date.now();
+  const base = {
+    eventId: ++_transitSeq,
+    pipeIdx,
+    fromStep: fromStep || null,
+    toStep,
+    startedAt,
+    durationMs
+  };
+  const opItem = {...base, screenPathType:'operation-horizontal'};
+  const wkItem = {...base, screenPathType:'worker-vertical'};
+  activeTransit.push(opItem, wkItem);
+  visualTransitQueue.push(base);
+  if(visualTransitQueue.length>80) visualTransitQueue.shift();
+  transitByPipeId[pipeIdx] = {fromStep:base.fromStep, toStep:base.toStep, startedAt:base.startedAt};
+  console.debug(`[SIM-TRANSIT] 생성 pipe=${pipeIdx} ${fromStep ?? 'ENTRY'}→${toStep}`);
+  _ensureTransitLoop();
+}
+
+function restoreSimulationVisualState(){
+  ensureTransitOverlay('operationTransitOverlay','opMachGrid');
+  ensureTransitOverlay('workerTransitOverlay','workerMachCol');
+  if(processRunning){
+    updateWorkerMachines(currentStep, stageSlots);
+    console.debug('[SIM-TRANSIT] 화면 복원: stageSlots + activeTransit 적용');
+  }
+  renderOperationTransitOverlay();
+  renderWorkerTransitOverlay();
+  if(activeTransit.length>0) _ensureTransitLoop();
+}
+
+function clearSimulationVisualState(){
+  activeTransit = [];
+  visualTransitQueue = [];
+  transitByPipeId = {};
+  if(transitAnimRaf!=null){
+    cancelAnimationFrame(transitAnimRaf);
+    transitAnimRaf = null;
+  }
+  const op = document.getElementById('operationTransitOverlay'); if(op) op.innerHTML='';
+  const wk = document.getElementById('workerTransitOverlay'); if(wk) wk.innerHTML='';
+  console.debug('[SIM-TRANSIT] 상태 초기화');
+}
+
 function runDemoSequenceTick(){
   if(!processRunning) return;
   const active = getActiveSteps();
@@ -3939,6 +4121,7 @@ function runDemoSequenceTick(){
     const entry = active[0];
     const pipeIdx = nextPipeFeedIdx;
     stageSlots[entry] = { pipeIdx, remain: pickStepDuration(entry) };
+    createTransitEvent(pipeIdx, null, entry);
     demoActiveStep = entry;
     updateViewersForPipe(pipeIdx);
     appendPipeTrace(pipeIdx, `${stageName(entry)} 투입`);
@@ -3964,6 +4147,7 @@ function runDemoSequenceTick(){
   if(next){
     stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
     stageSlots[curr] = null;
+    createTransitEvent(slot.pipeIdx, curr, next);
     demoActiveStep = next;
     appendPipeTrace(slot.pipeIdx, `${stageName(curr)}→${stageName(next)}`);
     setOpLog(`↪ [SIM] ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: ${stageName(curr)} → ${stageName(next)}${formatPipeTrace(slot.pipeIdx)}`);
@@ -4020,6 +4204,7 @@ function runPipelineTick(){
       if(target){
         stageSlots[target] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(target) };
         stageSlots[s] = null;
+        createTransitEvent(slot.pipeIdx, s, target);
         slot.holdReason = '';
         appendPipeTrace(slot.pipeIdx, `Robot→${stageName(target)}`);
         setOpLog(`↪ ${PIPE_DATA[slot.pipeIdx % PIPE_DATA.length].id}: Moving Robot → ${stageName(target)}${formatPipeTrace(slot.pipeIdx)}`);
@@ -4048,6 +4233,7 @@ function runPipelineTick(){
     const next = active[i+1];
     if(canReceivePipe(next)){
       stageSlots[next] = { pipeIdx: slot.pipeIdx, remain: pickStepDuration(next) };
+      createTransitEvent(slot.pipeIdx, s, next);
       appendPipeTrace(slot.pipeIdx, `${stageName(s)}→${stageName(next)}`);
       slot.holdReason = '';
       stageSlots[s] = null;
@@ -4063,6 +4249,7 @@ function runPipelineTick(){
   // 3) Loader 투입 (지속 공급)
   if(canReceivePipe(entryStep) && (entryStep!==4 || loaderBufferCount>0)){
     stageSlots[entryStep] = { pipeIdx: nextPipeFeedIdx, remain: pickStepDuration(entryStep) };
+    createTransitEvent(nextPipeFeedIdx, null, entryStep);
     const pid = PIPE_DATA[nextPipeFeedIdx % PIPE_DATA.length].id;
     appendPipeTrace(nextPipeFeedIdx, `${stageName(entryStep)} 투입`);
     setOpLog(`📥 ${stageName(entryStep)} 투입: ${pid}${formatPipeTrace(nextPipeFeedIdx)}`);
@@ -4118,6 +4305,7 @@ function handleStart(){
     PIPE_TRACE.clear();
     stopPipelineMode();
     updateLoaderReadyVisual();
+    clearSimulationVisualState();
   } else {
     // ── 시뮬 모드 OFF → 연결 상태 체크 ────────────────────────────
     if(!simModeOn){
@@ -4141,6 +4329,7 @@ function handleStart(){
     stopLoaderPrefetch();
     startPipelineMode(opPipeIdx);
     updateLoaderReadyVisual();
+    restoreSimulationVisualState();
   }
 }
 
@@ -4281,6 +4470,7 @@ function handleEmergency(){
   loaderBufferCount = 0;
   updateLoaderReadyVisual();
   stopPipelineMode();
+  clearSimulationVisualState();
   syncRunningLock(false);  // ← 비상 정지 시 잠금 해제
 }
 
@@ -6386,8 +6576,12 @@ function initWorkerPage(){
   workerFilter='all';
   _renderWorkerFilterBtns();
   renderWorkerPipeList();
-  // 머신 비활성 초기화
-  updateWorkerMachines(0);
+  // 가동 중이면 현재 시각 상태 복원, 아니면 대기 상태 초기화
+  if(processRunning){
+    updateWorkerMachines(currentStep, stageSlots);
+  }else{
+    updateWorkerMachines(0);
+  }
   // 첫 배관 자동 선택
   if(!workerSel && PIPE_DATA.length){
     selWorkerPipe(PIPE_DATA[0].id);

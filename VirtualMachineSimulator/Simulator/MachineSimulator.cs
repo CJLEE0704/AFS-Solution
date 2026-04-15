@@ -27,14 +27,14 @@ public sealed class MachineSimulator
         {
             if (State.RunState == SimRunState.EmergencyStop)
             {
-                return BuildError(cmd.CorrelationId, "ESTOP_ACTIVE");
+                return BuildError(cmd, "ESTOP_ACTIVE", "E-STOP active", "CRITICAL", true);
             }
 
             if (cmd.IsReadyQuery)
             {
-                return State.IsReady && State.RunState is SimRunState.Ready or SimRunState.Complete
-                    ? "OK"
-                    : "NOT_READY";
+                    return State.IsReady && State.RunState is SimRunState.Ready or SimRunState.Complete
+                    ? BuildAck(cmd)
+                    : BuildNotReady(cmd);
             }
 
             if (cmd.IsStatusQuery)
@@ -62,6 +62,9 @@ public sealed class MachineSimulator
                 State.IsReady = true;
                 State.CompleteLatched = true;
                 State.PermitGranted = false;
+                State.MotionInProgress = false;
+                State.TargetReached = true;
+                State.InPosition = true;
             }
         }
     }
@@ -86,6 +89,12 @@ public sealed class MachineSimulator
             State.CompleteLatched = false;
             State.BusyUntilUtc = null;
             State.PermitGranted = false;
+            State.MotionEnable = true;
+            State.InterlockOk = true;
+            State.SafeToMove = true;
+            State.MotionInProgress = false;
+            State.TargetReached = false;
+            State.InPosition = true;
         }
     }
 
@@ -121,7 +130,10 @@ public sealed class MachineSimulator
     {
         lock (_sync)
         {
-            return $"{State.MachineId,-8} Port={State.Port} State={State.RunState,-12} Ready={State.IsReady,-5} Alarm={State.ErrorCode,-12} LastCmd={State.LastCommandCode,-16} CID={State.LastCorrelationId}";
+            return $"{State.MachineId,-8} Port={State.Port} Client={(State.IsConnectedClientPresent ? "Y" : "N")} " +
+                   $"State={State.RunState,-12} Ready={(State.IsReady ? 1 : 0)} Alarm={State.ErrorCode,-12} " +
+                   $"Cmd={State.LastCommandCode,-14} CID={State.LastCorrelationId,-12} " +
+                   $"SafeMove={(State.SafeToMove ? 1 : 0)} Interlock={(State.InterlockOk ? 1 : 0)} Motion={(State.MotionInProgress ? 1 : 0)} Target={(State.TargetReached ? 1 : 0)}";
         }
     }
 
@@ -131,8 +143,9 @@ public sealed class MachineSimulator
         {
             "START" => StartWork(cmd.CorrelationId, "START", string.Empty),
             "STOP" => StopWork(cmd.CorrelationId, "STOP"),
+            "ESTOP" or "E_STOP" or "EMERGENCY_STOP" => EmergencyStop(cmd.CorrelationId, "E_STOP"),
             "RESET" => Reset(cmd.CorrelationId),
-            _ => BuildError(cmd.CorrelationId, "UNSUPPORTED_LEGACY_COMMAND")
+            _ => BuildError(cmd, "UNSUPPORTED_LEGACY_COMMAND")
         };
     }
 
@@ -145,7 +158,8 @@ public sealed class MachineSimulator
             "JOB_EXEC" or "CUTTING_JOB" or "MARKING_JOB" or "BENDING_JOB" or "ROBOT_TRANSFER" or
             "CUSTOM" => StartWork(cmd.CorrelationId, cmd.CommandCode, payloadJson),
             "ABORT" => StopWork(cmd.CorrelationId, "ABORT"),
-            _ => BuildError(cmd.CorrelationId, "UNSUPPORTED_STRUCTURED_COMMAND")
+            "E_STOP" or "ESTOP" => EmergencyStop(cmd.CorrelationId, "E_STOP"),
+            _ => BuildError(cmd, "UNSUPPORTED_STRUCTURED_COMMAND")
         };
     }
 
@@ -153,78 +167,137 @@ public sealed class MachineSimulator
     {
         if (State.RunState == SimRunState.Alarm)
         {
-            return BuildError(correlationId, "ALARM_ACTIVE");
+            return BuildError(correlationId, 0, commandCode, "ALARM_ACTIVE");
         }
 
         if (!State.IsReady || State.RunState == SimRunState.Busy)
         {
-            return BuildError(correlationId, "NOT_READY");
+            return BuildError(correlationId, 0, commandCode, "NOT_READY");
         }
 
         State.LastCorrelationId = correlationId;
+        State.LastSequenceNo = State.LastSequenceNo + 1;
         State.LastCommandCode = commandCode;
         State.LastPayloadJson = payloadJson;
         State.RunState = SimRunState.Busy;
         State.IsReady = false;
         State.PermitGranted = true;
         State.CompleteLatched = false;
+        State.TargetReached = false;
+        State.MotionInProgress = true;
+        State.InPosition = false;
         State.BusyUntilUtc = DateTime.UtcNow.AddMilliseconds(_defaultDurationMs);
-        return BuildOk(correlationId);
+        return BuildAck(correlationId, State.LastSequenceNo, commandCode);
     }
 
     private string StopWork(string correlationId, string commandCode)
     {
         State.LastCorrelationId = correlationId;
+        State.LastSequenceNo = State.LastSequenceNo + 1;
         State.LastCommandCode = commandCode;
         State.BusyUntilUtc = null;
         State.RunState = SimRunState.Ready;
         State.IsReady = true;
         State.PermitGranted = false;
         State.CompleteLatched = false;
+        State.MotionInProgress = false;
+        State.TargetReached = false;
+        State.InPosition = true;
         State.ErrorCode = string.Empty;
-        return BuildOk(correlationId);
+        return BuildStopped(correlationId, State.LastSequenceNo, commandCode);
+    }
+
+    private string EmergencyStop(string correlationId, string commandCode)
+    {
+        State.LastCorrelationId = correlationId;
+        State.LastSequenceNo = State.LastSequenceNo + 1;
+        State.LastCommandCode = commandCode;
+        State.RunState = SimRunState.EmergencyStop;
+        State.IsReady = false;
+        State.PermitGranted = false;
+        State.MotionEnable = false;
+        State.InterlockOk = false;
+        State.SafeToMove = false;
+        State.MotionInProgress = false;
+        State.TargetReached = false;
+        State.ErrorCode = "ESTOP";
+        return BuildError(correlationId, State.LastSequenceNo, commandCode, "ESTOP_ACTIVE", "Emergency stop", "CRITICAL", true);
     }
 
     private string Reset(string correlationId)
     {
         ClearAlarm();
         State.LastCorrelationId = correlationId;
+        State.LastSequenceNo = State.LastSequenceNo + 1;
         State.LastCommandCode = "RESET";
-        return BuildOk(correlationId);
+        State.MotionEnable = true;
+        State.InterlockOk = true;
+        State.SafeToMove = true;
+        State.MotionInProgress = false;
+        return BuildAck(correlationId, State.LastSequenceNo, "RESET");
     }
 
     private string BuildStatus()
     {
         if (State.RunState == SimRunState.Alarm)
         {
-            return $"STATUS:ALARM;READY=0;ERROR_CODE={State.ErrorCode}";
+            return $"STATUS:ALARM;READY=0;ERROR_CODE={State.ErrorCode};SEV=HIGH;RESET_REQUIRED=1;{BuildStateFlags()}";
         }
 
         if (State.RunState == SimRunState.EmergencyStop)
         {
-            return "STATUS:EMERGENCY_STOP;READY=0;ERROR_CODE=ESTOP";
+            return $"STATUS:EMERGENCY_STOP;READY=0;ERROR_CODE=ESTOP;SEV=CRITICAL;RESET_REQUIRED=1;{BuildStateFlags()}";
         }
 
         if (State.RunState == SimRunState.Busy)
         {
-            return $"STATUS:WORKING;READY=0;CID={State.LastCorrelationId};CMD={State.LastCommandCode}";
+            return $"STATUS:WORKING;READY=0;CID={State.LastCorrelationId};SEQ={State.LastSequenceNo};CMD={State.LastCommandCode};{BuildStateFlags()}";
         }
 
         if (State.CompleteLatched)
         {
             State.CompleteLatched = false;
             State.RunState = SimRunState.Ready;
-            return $"STATUS:FINISH;READY=1;UNLOAD_COMPLETE;CID={State.LastCorrelationId};CMD={State.LastCommandCode}";
+            State.MotionInProgress = false;
+            State.TargetReached = true;
+            State.InPosition = true;
+            return $"STATUS:FINISH;READY=1;UNLOAD_COMPLETE;CID={State.LastCorrelationId};SEQ={State.LastSequenceNo};CMD={State.LastCommandCode};{BuildStateFlags()}";
         }
 
-        return "STATUS:READY;READY=1";
+        return $"STATUS:READY;READY=1;CID={State.LastCorrelationId};SEQ={State.LastSequenceNo};CMD={State.LastCommandCode};{BuildStateFlags()}";
     }
 
-    private static string BuildOk(string correlationId)
-        => string.IsNullOrWhiteSpace(correlationId) ? "OK" : $"OK;CID={correlationId}";
+    private string BuildAck(ParsedCommand cmd)
+        => BuildAck(cmd.CorrelationId, cmd.SequenceNo, cmd.CommandCode);
 
-    private static string BuildError(string correlationId, string code)
+    private string BuildAck(string correlationId, long sequenceNo, string commandCode)
         => string.IsNullOrWhiteSpace(correlationId)
-            ? $"ERROR;CODE={code}"
-            : $"ERROR;CID={correlationId};CODE={code}";
+            ? $"OK;SEQ={sequenceNo};CMD={commandCode};VER={State.ProtocolVersion};MPROF={State.MachineProfile};VPROF={State.VendorProfile}"
+            : $"OK;CID={correlationId};SEQ={sequenceNo};CMD={commandCode};VER={State.ProtocolVersion};MPROF={State.MachineProfile};VPROF={State.VendorProfile}";
+
+    private string BuildStopped(string correlationId, long sequenceNo, string commandCode)
+        => string.IsNullOrWhiteSpace(correlationId)
+            ? $"STOPPED;SEQ={sequenceNo};CMD={commandCode};READY=1;{BuildStateFlags()}"
+            : $"STOPPED;CID={correlationId};SEQ={sequenceNo};CMD={commandCode};READY=1;{BuildStateFlags()}";
+
+    private string BuildNotReady(ParsedCommand cmd)
+        => $"NOT_READY;CID={cmd.CorrelationId};SEQ={cmd.SequenceNo};CMD={cmd.CommandCode};CODE=NOT_READY;{BuildStateFlags()}";
+
+    private string BuildError(ParsedCommand cmd, string code, string message = "", string severity = "", bool resetRequired = false)
+        => BuildError(cmd.CorrelationId, cmd.SequenceNo, cmd.CommandCode, code, message, severity, resetRequired);
+
+    private string BuildError(string correlationId, long sequenceNo, string commandCode, string code, string message = "", string severity = "", bool resetRequired = false)
+    {
+        var msg = string.IsNullOrWhiteSpace(message) ? "" : $";MSG={message}";
+        var sev = string.IsNullOrWhiteSpace(severity) ? "" : $";SEV={severity}";
+        var reset = $";RESET_REQUIRED={(resetRequired ? 1 : 0)}";
+        if (string.IsNullOrWhiteSpace(correlationId))
+        {
+            return $"ERROR;SEQ={sequenceNo};CMD={commandCode};CODE={code}{msg}{sev}{reset};VER={State.ProtocolVersion};MPROF={State.MachineProfile};VPROF={State.VendorProfile}";
+        }
+        return $"ERROR;CID={correlationId};SEQ={sequenceNo};CMD={commandCode};CODE={code}{msg}{sev}{reset};VER={State.ProtocolVersion};MPROF={State.MachineProfile};VPROF={State.VendorProfile}";
+    }
+
+    private string BuildStateFlags()
+        => $"SAFE_TO_MOVE={(State.SafeToMove ? 1 : 0)};INTERLOCK_OK={(State.InterlockOk ? 1 : 0)};MOTION_ENABLE={(State.MotionEnable ? 1 : 0)};HOMED={(State.Homed ? 1 : 0)};IN_POSITION={(State.InPosition ? 1 : 0)};TARGET_REACHED={(State.TargetReached ? 1 : 0)};MOTION_IN_PROGRESS={(State.MotionInProgress ? 1 : 0)}";
 }

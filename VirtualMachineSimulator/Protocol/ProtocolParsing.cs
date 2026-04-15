@@ -8,6 +8,10 @@ public sealed class ParsedCommand
     public string MachinePrefix { get; init; } = string.Empty;
     public string CommandCode { get; init; } = string.Empty;
     public string CorrelationId { get; init; } = string.Empty;
+    public long SequenceNo { get; init; }
+    public string ProtocolVersion { get; init; } = string.Empty;
+    public string MachineProfile { get; init; } = string.Empty;
+    public string VendorProfile { get; init; } = string.Empty;
     public string PayloadBase64 { get; init; } = string.Empty;
     public bool IsLegacy { get; init; }
     public bool IsStatusQuery { get; init; }
@@ -35,6 +39,10 @@ public static class ProtocolParsing
                 MachinePrefix = prefix,
                 CommandCode = GetToken(raw, "CMD").ToUpperInvariant(),
                 CorrelationId = GetToken(raw, "CID"),
+                SequenceNo = TryGetLongToken(raw, "SEQ"),
+                ProtocolVersion = GetToken(raw, "VER"),
+                MachineProfile = GetToken(raw, "MPROF"),
+                VendorProfile = GetToken(raw, "VPROF"),
                 PayloadBase64 = GetToken(raw, "PAYLOAD"),
                 IsLegacy = false,
                 IsStatusQuery = false,
@@ -86,5 +94,11 @@ public static class ProtocolParsing
         var remain = raw[start..];
         var end = remain.IndexOf(';');
         return end >= 0 ? remain[..end].Trim() : remain.Trim();
+    }
+
+    private static long TryGetLongToken(string raw, string key)
+    {
+        var token = GetToken(raw, key);
+        return long.TryParse(token, out var n) ? n : 0;
     }
 }

@@ -4151,6 +4151,15 @@ function updatePipelineVisual(){
   const lineModel = buildMachineLineModel(active, stageSlots);
   renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
   const occupied = active.filter(s=>stageSlots[s]);
+  const flowSvg=document.getElementById('flowSvg');
+  if(flowSvg){
+    const flowStateMap={};
+    active.forEach(stepId=>{
+      flowStateMap[stepId] = stageSlots[stepId] ? 'running' : 'idle';
+    });
+    renderFixedMachinePipeLine(flowSvg, active, {layerId:'fixedPipeLayerDash'});
+    renderMachineStatusDots(flowSvg, active, {layerId:'fixedPipeDotLayerDash', statusMap:flowStateMap});
+  }
   const lead = occupied.length ? occupied[occupied.length-1] : 0;
   currentStep = lead || 0;
   if(lead){

@@ -1,0 +1,62 @@
+[UI_PIPE_REMOVE_PHASE1_NOTES]
+
+1) 제거/비활성화한 배관 로직 목록
+- renderFixedMachinePipeLine(...) : no-op 처리, 기존 레이어 제거 후 return
+- renderMachineStatusDots(...)    : no-op 처리, 기존 점 레이어 제거 후 return
+- renderMachineLineOverlayByCards(...) : no-op 처리, 오버레이 제거 후 return
+- buildWorkerStraightPipe(...)    : no-op(return null)
+- renderMachinePipeStatusDot(...) : no-op(return)
+- _animMachPipe(...)              : no-op(return)
+- moveDashPipeTo(...), movePipeTo(...) : 기존과 동일 no-op 유지
+- ensureDashPipe(...), buildMovingPipe(...) : 배관 그리기 없이 안전 호출 경로 유지
+
+2) Admin/Dashboard 적용 내용
+- flow 렌더 경로에서 배관/상태점 생성 함수는 모두 no-op이므로 화면에 배관이 생성되지 않음
+- 기존 flowSvg 내부 정적 배관 그룹(ptg)은 renderMachineLineView(flow)에서 display:none 처리
+- 결과: 관리자 화면에서 머신 카드/머신명은 유지, 배관 시각 요소는 비표시
+
+3) Worker/Operation 적용 내용
+- updateWorkerMachines(...)에서 머신 내부 배관 애니메이션 호출 제거 상태 유지
+- 머신 내부 배관 관련 함수는 no-op으로 강제 비활성화
+- 카드 간 단일 오버레이 배관 함수(renderMachineLineOverlayByCards)도 no-op 처리
+- 결과: Worker/Operation에서 머신 내부 배관/장비 사이 배관/배관 상태점 모두 비표시
+
+4) 남아 있는 pipe 관련 함수/키워드와 이유
+- _animMachPipe / buildWorkerStraightPipe / renderMachinePipeStatusDot
+  - 코드 호환성 때문에 함수 시그니처 유지
+  - 모두 no-op 처리되어 실제 렌더링 미사용
+- renderFixedMachinePipeLine / renderMachineStatusDots
+  - 공통 렌더 호출 안전성을 위해 함수 유지
+  - 모두 no-op 처리
+- moveDashPipeTo / movePipeTo
+  - 레거시 흐름 참조 대응용 no-op 유지
+- dashMovingPipe / movingPipe
+  - 레거시 remove/query 참조만 남음 (실제 생성 없음)
+- wPipe / oPipe
+  - 잔존 배관 엘리먼트 정리(remove)용 querySelector 문자열로만 존재
+- pipe-main-line / pipe-base / pipe-active / pipe-segment
+  - 현재 소스 기준 렌더 클래스/ID 실사용 없음
+
+5) 키워드 검색 요약
+- 검색 키워드:
+  _animMachPipe, buildWorkerStraightPipe, renderMachinePipeStatusDot,
+  renderFixedMachinePipeLine, renderMachineStatusDots,
+  dashMovingPipe, movingPipe, moveDashPipeTo, movePipeTo,
+  buildMovingPipe, ensureDashPipe, wPipe, oPipe,
+  pipe-main-line, pipe-base, pipe-active, pipe-segment
+- 남아 있는 항목은 대부분 no-op 또는 레거시 호환/정리 목적이며,
+  실제 배관 렌더링 경로에는 사용되지 않도록 처리됨
+
+6) 수동 확인 방법
+- Admin/Dashboard
+  1) 로그인 후 Dashboard 진입
+  2) 머신 카드/머신명 표시 확인
+  3) 카드 내부 배관, 장비 사이 은색 배관, 배관 위 녹색 점이 보이지 않는지 확인
+- Worker/Operation
+  1) Operation/Worker 화면 진입
+  2) 머신 카드 내부 배관(wPipe/oPipe 시각요소) 비표시 확인
+  3) 장비 사이 배관 오버레이 비표시 확인
+- 공통
+  1) Start/Pause/Stop 버튼 동작
+  2) 설정 기반 머신 선택/표시 유지 확인
+  3) 콘솔 오류 유무 확인

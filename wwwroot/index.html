@@ -2680,6 +2680,8 @@ function renderMachineLineView(containerId, machines, options={}){
     if(svg){
       renderFixedMachinePipeLine(svg, steps, {layerId:preset.pipeLayer});
       renderMachineStatusDots(svg, steps, {layerId:preset.dotLayer, statusMap});
+      const ptg=document.getElementById('ptg');
+      if(ptg) ptg.style.display='none';
     }
     return;
   }
@@ -2719,61 +2721,8 @@ function renderMachineLineView(containerId, machines, options={}){
 function renderMachineLineOverlayByCards(containerId, cardIds, statusByStep, options={}){
   const host=document.getElementById(containerId);
   if(!host) return;
-  if(getComputedStyle(host).position==='static') host.style.position='relative';
-  let ov=host.querySelector('#'+(options.overlayId||'machineLineOverlay'));
-  if(!ov){
-    const NS='http://www.w3.org/2000/svg';
-    ov=document.createElementNS(NS,'svg');
-    ov.setAttribute('id', options.overlayId||'machineLineOverlay');
-    ov.setAttribute('class','machine-line-overlay');
-    host.appendChild(ov);
-  }
-  const rect=host.getBoundingClientRect();
-  const w=Math.max(1, Math.round(rect.width));
-  const h=Math.max(1, Math.round(rect.height));
-  ov.setAttribute('viewBox',`0 0 ${w} ${h}`);
-  while(ov.firstChild) ov.removeChild(ov.firstChild);
-  const pts=[];
-  cardIds.forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el) return;
-    const st=getComputedStyle(el);
-    if(st.display==='none' || st.visibility==='hidden') return;
-    const r=el.getBoundingClientRect();
-    if(r.width<2 || r.height<2) return;
-    pts.push({
-      id,
-      x:(r.left-rect.left)+(r.width/2),
-      y:(r.top-rect.top)+(r.height/2),
-      stepId:Number(String(id).replace(/\D/g,'')) || 0
-    });
-  });
-  if(pts.length===0) return;
-  const NS='http://www.w3.org/2000/svg';
-  const defs=document.createElementNS(NS,'defs');
-  defs.innerHTML=`
-    <linearGradient id="${options.overlayId||'machineLineOverlay'}Grad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F3F8FB"/>
-      <stop offset="28%" stop-color="#CDD8E0"/>
-      <stop offset="70%" stop-color="#8193A2"/>
-      <stop offset="100%" stop-color="#4A5B6A"/>
-    </linearGradient>`;
-  ov.appendChild(defs);
-  const mk=(tag,at)=>{const e=document.createElementNS(NS,tag);Object.entries(at).forEach(([k,v])=>e.setAttribute(k,String(v)));return e;};
-  for(let i=0;i<pts.length-1;i++){
-    const a=pts[i], b=pts[i+1];
-    ov.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'rgba(0,0,0,0.35)','stroke-width':12,'stroke-linecap':'round'}));
-    ov.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:`url(#${options.overlayId||'machineLineOverlay'}Grad)`,'stroke-width':7,'stroke-linecap':'round'}));
-  }
-  pts.forEach(p=>{
-    const st=statusByStep[p.stepId] || 'idle';
-    const col=PIPE_STATUS_COLORS[st] || PIPE_STATUS_COLORS.idle;
-    const r=st==='running'?6.5:4.5;
-    const c=mk('circle',{cx:p.x,cy:p.y,r,fill:col,stroke:'rgba(255,255,255,0.55)','stroke-width':1});
-    if(st==='running') c.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
-    if(st==='alarm') c.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
-    ov.appendChild(c);
-  });
+  host.querySelector('#'+(options.overlayId||'machineLineOverlay'))?.remove();
+  return; // Phase: 장비 사이 배관/점 오버레이 제거
 }
 function getMachineAssetPair(type){
   const primary = MACHINE_ASSET_BASE + (MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default);
@@ -3886,85 +3835,16 @@ const PIPE_STATUS_COLORS = {
 
 function renderFixedMachinePipeLine(svg, machines, options={}){
   if(!svg) return null;
-  ensurePipeDefs(svg);
   const layerId = options.layerId || 'fixedPipeLayer';
-  let layer = svg.querySelector('#'+layerId);
-  if(!layer){
-    const NS='http://www.w3.org/2000/svg';
-    layer=document.createElementNS(NS,'g');
-    layer.id=layerId;
-    layer.setAttribute('data-fixed-pipe','1');
-    layer.style.pointerEvents='none';
-    svg.appendChild(layer);
-  }
-  while(layer.firstChild) layer.removeChild(layer.firstChild);
-  const NS='http://www.w3.org/2000/svg';
-  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
-  const y = options.y ?? CONV_Y;
-  const h = options.h ?? CONV_H;
-  const r = h/2;
-  const L = options.length ?? PIPE_LEN;
-  function mk(tag,attrs){
-    const el=document.createElementNS(NS,tag);
-    Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
-    return el;
-  }
-  drawSteps.forEach(stepId=>{
-    const x = PIPE_DWELL[stepId] ?? PIPE_DWELL.start ?? 0;
-    const g=document.createElementNS(NS,'g');
-    g.setAttribute('data-fixed-pipe-step', String(stepId));
-    g.appendChild(mk('rect',{x:String(x+2),y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#mpSh)'}));
-    g.appendChild(mk('rect',{x:String(x),y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#mpGrad)'}));
-    g.appendChild(mk('rect',{x:String(x+5),y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
-    g.appendChild(mk('rect',{x:String(x+7),y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
-    for(let i=26;i<L-26;i+=22){
-      g.appendChild(mk('rect',{x:String(x+i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
-    }
-    g.appendChild(mk('ellipse',{cx:String(x+3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-    g.appendChild(mk('ellipse',{cx:String(x+L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-    layer.appendChild(g);
-  });
-  return layer;
+  svg.querySelector('#'+layerId)?.remove();
+  return null; // Phase: 모든 배관 시각 요소 제거
 }
 
 function renderMachineStatusDots(svg, machines, options={}){
   if(!svg) return null;
   const layerId = options.layerId || 'fixedPipeDotLayer';
-  let layer = svg.querySelector('#'+layerId);
-  if(!layer){
-    const NS='http://www.w3.org/2000/svg';
-    layer=document.createElementNS(NS,'g');
-    layer.id=layerId;
-    layer.setAttribute('data-fixed-pipe-dot','1');
-    layer.style.pointerEvents='none';
-    svg.appendChild(layer);
-  }
-  while(layer.firstChild) layer.removeChild(layer.firstChild);
-  const NS='http://www.w3.org/2000/svg';
-  const states = options.statusMap || {};
-  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
-  const y = options.y ?? CONV_Y;
-  const h = options.h ?? CONV_H;
-  const cy = y + h/2;
-  drawSteps.forEach(stepId=>{
-    const x = (PIPE_DWELL[stepId] ?? 0) + (options.length ?? PIPE_LEN) / 2;
-    const st = states[stepId] || 'idle';
-    const color = PIPE_STATUS_COLORS[st] || PIPE_STATUS_COLORS.idle;
-    const c=document.createElementNS(NS,'circle');
-    c.setAttribute('cx', String(x));
-    c.setAttribute('cy', String(cy));
-    c.setAttribute('r', st==='running' ? '7' : '5');
-    c.setAttribute('fill', color);
-    c.setAttribute('stroke', 'rgba(255,255,255,0.55)');
-    c.setAttribute('stroke-width', '1');
-    if(st==='running'){
-      c.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
-    }else if(st==='alarm'){
-      c.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
-    }
-    layer.appendChild(c);
-  });
-  return layer;
+  svg.querySelector('#'+layerId)?.remove();
+  return null; // Phase: 배관 상태 점 제거
 }
 
 // ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──

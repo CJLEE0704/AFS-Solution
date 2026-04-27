@@ -1590,6 +1590,7 @@ const menuItems = ADMIN_MENUS; // placeholder, initNav uses role-based list
 
 // ── SHARED PIPE DATA (Dashboard + Operation 동일하게 사용) ──
 const STATUS_LIST=['대기','대기','대기','대기','대기','대기'];
+const UI_BUILD_VERSION='2026-04-27-login-hotfix-v2';
 const PIPE_DATA = Array(30).fill(null).map((_,i)=>({
   id:`PIPE-2024-${1500+i}`,
   status: STATUS_LIST[i%6],
@@ -7170,6 +7171,7 @@ function syncWorkerBtn(running){
 // 14. WINDOW ONLOAD
 // ═══════════════════════════════════════════════════════════════
 window.onload=function(){
+  console.info('[UI BUILD]', UI_BUILD_VERSION);
   applyRoleDensity('admin');
   initTheme();
   updateClock();

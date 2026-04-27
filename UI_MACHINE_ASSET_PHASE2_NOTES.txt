@@ -1,0 +1,50 @@
+[UI Machine Asset Phase2 변경 요약]
+
+1) 목표
+- 기존 SVG 아이콘형 머신 표현을 이미지 asset 기반으로 전환
+- 배관은 1차 고정형 은색 배관 구조를 유지
+- 레이아웃(좌측 메뉴/KPI/프로젝트 리스트/상세 패널) 비변경
+
+2) 주요 코드 변경
+- 파일: wwwroot/index.html
+  - 머신 이미지 매핑 추가
+    - MACHINE_ASSET_MAP, MACHINE_PROFILE, getMachineAssetPair()
+  - 이미지 기반 머신 SVG 렌더 함수 추가
+    - buildMachineAssetSvg(stepId, active, mode, state)
+    - foreignObject + img 태그(주이미지/기본에셋/내장 placeholder) 구조 적용
+    - object-fit: contain 적용
+  - 기존 MSVG를 이미지 기반 렌더러 호출 구조로 교체
+    - MSVG[1..6] -> buildMachineAssetSvg 위임
+  - 상태 반영 헬퍼 추가
+    - getMachineVisualState(stepId, active)
+    - running/idle/alarm/offline 상태 반영
+  - 화면 모드 연동
+    - dashboard: 큰 이미지 영역
+    - operation/worker: 작은 이미지 영역
+
+3) 에셋 경로 구조
+- 폴더 생성: wwwroot/assets/machines/
+- 안내 파일: wwwroot/assets/machines/README_MACHINE_ASSETS.txt
+- 권장 파일명:
+  - machine-loader.webp
+  - machine-cutting.webp
+  - machine-marking.webp
+  - machine-robot.webp
+  - machine-bending-1.webp
+  - machine-bending-2.webp
+  - machine-default.webp
+
+4) fallback 정책
+- 주 에셋 로딩 실패 시 onerror로 주 이미지 숨김
+- 기본 에셋(machine-default.webp) 레이어 노출
+- 기본 에셋도 없을 경우 내장 SVG placeholder 노출
+- 깨진 이미지 아이콘이 보이지 않도록 다중 fallback 레이어 적용
+
+5) 설정 기반 표시 유지
+- 기존 구성/설정 로직(active machines) 유지
+- 선택되지 않은 머신은 기존처럼 숨김/비활성 처리
+- Bending #1 / #2는 B1/B2 배지 및 라벨로 구분
+
+6) 비범위
+- 배관 이동/표시 구조 추가 변경 없음 (1차 고정형 유지)
+- 전체 UI 재디자인 없음

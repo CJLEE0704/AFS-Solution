@@ -200,6 +200,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 .flow-row{display:grid;grid-template-columns:2fr 1fr;gap:5px;flex-shrink:0;height:280px}
 .flow-inner{background:linear-gradient(155deg,var(--hero-a),var(--hero-b));border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden;box-shadow:var(--shadow-soft)}
 .flow-svg{width:100%;height:100%}
+.machine-asset-box{position:relative;width:100%;height:100%;overflow:hidden}
+.machine-asset{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.machine-asset-fallback{opacity:.92}
 .step-badge{position:absolute;bottom:6px;right:6px;background:rgba(8,16,30,.96);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;display:flex;align-items:center;gap:6px}
 .step-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .step-lbl{font-size:15px;font-weight:700;color:var(--bright)}
@@ -1587,6 +1590,7 @@ const menuItems = ADMIN_MENUS; // placeholder, initNav uses role-based list
 
 // ── SHARED PIPE DATA (Dashboard + Operation 동일하게 사용) ──
 const STATUS_LIST=['대기','대기','대기','대기','대기','대기'];
+const UI_BUILD_VERSION='2026-04-27-login-hotfix-v2';
 const PIPE_DATA = Array(30).fill(null).map((_,i)=>({
   id:`PIPE-2024-${1500+i}`,
   status: STATUS_LIST[i%6],
@@ -1799,7 +1803,7 @@ function doLogin(){
 
   // DB 전용 인증 (WebView2 환경)
   if(window.chrome?.webview){
-    const reqId = (++_loginReqSeq);
+    const reqId = String(++_loginReqSeq);
     if(_loginPending?.timer) clearTimeout(_loginPending.timer);
     _loginPending = { id, pw, reqId, timer: null };
     window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
@@ -2034,11 +2038,10 @@ function setMenu(id){
       if(processRunning){
         updateWorkerMachines(currentStep);
         const svg=document.getElementById('flowSvg');
-        if(svg && !document.getElementById('movingPipe')){
+        if(svg){
           buildMovingPipe(svg);
           const ptg=document.getElementById('ptg');
           if(ptg){ptg.style.opacity='0';}
-          if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
         }
       }
       restoreSimulationVisualState();
@@ -2304,51 +2307,14 @@ function startDashAuto(){
 let dashPipeEl=null, dashPipeCurX=-270;
 
 function ensureDashPipe(svg){
-  if(document.getElementById('dashMovingPipe')) return;
-  ensurePipeDefs(svg);
-  const old=document.getElementById('dashMovingPipe'); if(old) old.remove();
-  const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id='dashMovingPipe';
-  const r=CONV_H/2, L=PIPE_LEN, y=CONV_Y, h=CONV_H;
-  function mk(tag,attrs){
-    const el=document.createElementNS(NS,tag);
-    Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
-    return el;
-  }
-  g.appendChild(mk('rect',{x:'4',y:String(y+6),width:String(L),height:String(h),
-    rx:String(r),fill:'rgba(0,0,0,0.45)',filter:'url(#mpSh)'}));
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),
-    rx:String(r),fill:'url(#mpGrad)'}));
-  g.appendChild(mk('rect',{x:'6',y:String(y+2),width:String(L-12),height:String(h*0.28|0),
-    rx:String(r),fill:'rgba(255,255,255,0.58)'}));
-  g.appendChild(mk('rect',{x:'8',y:String(y+h-4),width:String(L-16),height:'3',
-    rx:'2',fill:'rgba(0,0,0,0.26)'}));
-  for(let i=24;i<L-24;i+=22){
-    g.appendChild(mk('rect',{x:String(i),y:String(y+h/2-1|0),
-      width:'14',height:'2',rx:'1',fill:'rgba(255,255,255,0.22)'}));
-  }
-  g.appendChild(mk('ellipse',{cx:'2',cy:String(y+r),rx:'5',ry:String(r-1),
-    fill:'#2E3C4A',stroke:'#5D6F81','stroke-width':'1.2'}));
-  g.appendChild(mk('ellipse',{cx:String(L-2),cy:String(y+r),rx:'5',ry:String(r-1),
-    fill:'#2E3C4A',stroke:'#5D6F81','stroke-width':'1.2'}));
-  dashPipeCurX=-270;
-  g.setAttribute('transform',`translate(${dashPipeCurX},0)`);
-  svg.appendChild(g);
-  dashPipeEl=g;
+  const lineModel = buildMachineLineModel(getActiveSteps(), stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
+  dashPipeEl = null;
 }
 
 function moveDashPipeTo(targetX, dur, cb){
-  if(!dashPipeEl){if(cb)cb();return;}
-  const sx=dashPipeCurX, dist=targetX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    if(!dashAutoRunning) return;
-    const p=Math.min((now-t0)/dur,1);
-    dashPipeCurX=sx+dist*ease(p);
-    if(dashPipeEl) dashPipeEl.setAttribute('transform',`translate(${dashPipeCurX},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{dashPipeCurX=targetX; if(cb)cb();}
-  })(performance.now());
+  dashPipeCurX = dashPipeCurX;
+  if(typeof cb==='function') cb();
 }
 
 let dashPipeIdx = 0; // 현재 처리 중인 배관 인덱스
@@ -2624,22 +2590,156 @@ function mkGlow(x,y,w,h,rx,c){return`<rect x="${x-20}" y="${y-20}" width="${w+40
 function mkScan(x,y,w,h,c){return`<rect x="${x+2}" y="${y+2}" width="${w-4}" height="5" rx="2.5" fill="${c}" opacity="0.7"><animate attributeName="y" values="${y+2};${y+h-7};${y+2}" dur="1.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;0.15;0.7" dur="1.2s" repeatCount="indefinite"/></rect>`;}
 function mkBadge(x,y,c){return`<rect x="${x}" y="${y}" width="104" height="26" rx="6" fill="${c}"/><rect x="${x+1}" y="${y+1}" width="102" height="12" rx="5" fill="white" opacity="0.15"/><circle cx="${x+14}" cy="${y+13}" r="6" fill="white"><animate attributeName="opacity" values="1;0;1" dur="0.6s" repeatCount="indefinite"/></circle><text x="${x+27}" y="${y+18}" fill="#040c18" font-size="14" font-weight="900" letter-spacing="0.5">작동중</text>`;}
 
-const MSVG={
-  4:a=>`<rect x="10" y="30" width="330" height="280" rx="10" fill="#060e1a" stroke="#69B8D6" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="10" y="30" width="330" height="280" rx="10" fill="#69B8D6" fill-opacity="${a?.07:0}"/><rect x="30" y="70" width="86" height="170" rx="6" fill="#09111A" stroke="#69B8D6" stroke-opacity="${a?1:.28}" stroke-width="1.4"/><rect x="142" y="70" width="86" height="170" rx="6" fill="#09111A" stroke="#69B8D6" stroke-opacity="${a?1:.28}" stroke-width="1.4"/><rect x="254" y="70" width="66" height="170" rx="6" fill="#09111A" stroke="#69B8D6" stroke-opacity="${a?1:.28}" stroke-width="1.4"/><line x1="30" y1="155" x2="320" y2="155" stroke="#69B8D6" stroke-width="2" stroke-opacity="${a?.5:.18}" stroke-dasharray="8,5"/><text x="175" y="266" text-anchor="middle" fill="#69B8D6" font-size="32" font-weight="800" opacity="${a?1:.5}">Auto Loader</text>${a?`${mkGlow(10,30,330,280,10,'#69B8D6')}${mkScan(11,31,328,278,'#69B8D6')}${mkBadge(16,35,'#0e4058')}<circle cx="73" cy="130" r="10" fill="#69B8D6"><animate attributeName="cy" values="130;115;130" dur=".8s" repeatCount="indefinite"/></circle><circle cx="185" cy="130" r="10" fill="#69B8D6"><animate attributeName="cy" values="130;115;130" dur=".8s" begin=".27s" repeatCount="indefinite"/></circle><circle cx="287" cy="130" r="10" fill="#69B8D6"><animate attributeName="cy" values="130;115;130" dur=".8s" begin=".54s" repeatCount="indefinite"/></circle>`:''} `,
-  3:a=>`<rect x="410" y="30" width="300" height="280" rx="10" fill="#0E1813" stroke="#73C59B" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="410" y="30" width="300" height="280" rx="10" fill="#73C59B" fill-opacity="${a?.07:0}"/><line x1="430" y1="90" x2="690" y2="90" stroke="#73C59B" stroke-width="5" stroke-opacity="${a?1:.28}" stroke-linecap="round"/><rect x="530" y="78" width="60" height="36" rx="5" fill="#0E1813" stroke="#73C59B" stroke-width="2.5" stroke-opacity="${a?1:.5}">${a?`<animate attributeName="y" values="78;96;78" dur=".6s" repeatCount="indefinite"/>`:''}</rect><polygon points="560,114 578,140 542,140" fill="#73C59B" opacity="${a?1:.4}">${a?`<animate attributeName="points" values="560,114 578,140 542,140;560,128 578,154 542,154;560,114 578,140 542,140" dur=".6s" repeatCount="indefinite"/>`:''}</polygon><rect x="440" y="148" width="240" height="80" rx="5" fill="#0E1813" stroke="#73C59B" stroke-opacity="${a?1:.22}" stroke-width="1.2"/><text x="560" y="262" text-anchor="middle" fill="#73C59B" font-size="32" font-weight="800" opacity="${a?1:.5}">Cutting M/C</text>${a?`${mkGlow(410,30,300,280,10,'#73C59B')}${mkScan(411,31,298,278,'#73C59B')}${mkBadge(416,35,'#0a3e20')}`:''} `,
-  2:a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#140c04" stroke="#D39D63" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="780" y="30" width="300" height="280" rx="10" fill="#D39D63" fill-opacity="${a?.07:0}"/><rect x="808" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="896" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><rect x="984" y="68" width="58" height="80" rx="5" fill="#15110C" stroke="#D39D63" stroke-opacity="${a?1:.28}" stroke-width="1.3"/><polygon points="837,148 851,175 823,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" repeatCount="indefinite"/>`:''}</polygon><polygon points="925,148 939,175 911,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".12s" repeatCount="indefinite"/>`:''}</polygon><polygon points="1013,148 1027,175 999,175" fill="#D39D63" opacity="${a?1:.4}">${a?`<animate attributeName="opacity" values="1;0.05;1" dur=".36s" begin=".24s" repeatCount="indefinite"/>`:''}</polygon><text x="930" y="265" text-anchor="middle" fill="#D39D63" font-size="32" font-weight="800" opacity="${a?1:.5}">Laser Marking</text>${a?`${mkGlow(780,30,300,280,10,'#D39D63')}${mkScan(781,31,298,278,'#D39D63')}${mkBadge(786,35,'#522c0a')}`:''} `,
-  1:a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `,
+const MACHINE_INLINE_PLACEHOLDER = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 520'%3E%3Crect width='800' height='520' fill='%2316212d'/%3E%3Crect x='28' y='28' width='744' height='464' rx='28' fill='%23223344' stroke='%23638ca7' stroke-width='4'/%3E%3Ctext x='400' y='265' text-anchor='middle' fill='%23b8d7ea' font-size='48' font-family='Arial' font-weight='700'%3EMACHINE%3C/text%3E%3C/svg%3E";
+const MACHINE_ASSET_BASE = './assets/machines/';
+const MACHINE_ASSET_MAP = {
+  loader: 'machine-loader.webp',
+  cutting: 'machine-cutting.webp',
+  marking: 'machine-marking.webp',
+  robot: 'machine-robot.webp',
+  bending1: 'machine-bending-1.webp',
+  bending2: 'machine-bending-2.webp',
+  bending: 'machine-bending-1.webp',
+  default: 'machine-default.webp'
 };
-MSVG[6]=a=>`<rect x="1150" y="30" width="400" height="280" rx="10" fill="#0c0818" stroke="#9285D4" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.4}"/><rect x="1150" y="30" width="400" height="280" rx="10" fill="#9285D4" fill-opacity="${a?.07:0}"/><circle cx="1260" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1440" cy="155" r="68" fill="#121124" stroke="#9285D4" stroke-opacity="${a?1:.38}" stroke-width="2.5"/><circle cx="1260" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1260 155" to="360 1260 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><circle cx="1440" cy="155" r="26" fill="#211B3E" stroke="#9285D4" stroke-opacity="${a?1:.6}" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1440 155" to="-360 1440 155" dur="2.2s" repeatCount="indefinite"/>`:''}</circle><rect x="1320" y="80" width="60" height="48" rx="5" fill="#100c28" stroke="#9285D4" stroke-opacity="${a?1:.5}" stroke-width="2">${a?`<animate attributeName="y" values="80;92;80" dur="1.6s" repeatCount="indefinite"/>`:''}</rect><text x="1350" y="265" text-anchor="middle" fill="#9285D4" font-size="32" font-weight="800" opacity="${a?1:.5}">Bending M/C #2</text>${a?`${mkGlow(1150,30,400,280,10,'#9285D4')}${mkScan(1151,31,398,278,'#9285D4')}${mkBadge(1156,35,'#2a1e58')}`:''} `;
-MSVG[5]=a=>`<rect x="780" y="30" width="300" height="280" rx="10" fill="#0b1a2a" stroke="#63AEC9" stroke-width="${a?3:1.5}" stroke-opacity="${a?1:.45}"/>
-<rect x="780" y="30" width="300" height="280" rx="10" fill="#63AEC9" fill-opacity="${a?.07:0}"/>
-<rect x="800" y="87" width="260" height="18" rx="9" fill="#1b3246" stroke="#63AEC9" stroke-opacity=".45"/>
-<circle cx="835" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 835 155" to="360 835 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<circle cx="1025" cy="155" r="32" fill="#12283A" stroke="#63AEC9" stroke-opacity=".5" stroke-width="2">${a?`<animateTransform attributeName="transform" type="rotate" from="0 1025 155" to="360 1025 155" dur="1.8s" repeatCount="indefinite"/>`:''}</circle>
-<rect x="900" y="134" width="60" height="30" rx="5" fill="#193247" stroke="#63AEC9" stroke-opacity=".6">${a?`<animate attributeName="x" values="900;914;900" dur="1.1s" repeatCount="indefinite"/>`:''}</rect>
-<line x1="835" y1="155" x2="930" y2="149" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x2" values="930;944;930" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<line x1="960" y1="149" x2="1025" y2="155" stroke="#63AEC9" stroke-width="3" stroke-linecap="round">${a?`<animate attributeName="x1" values="960;974;960" dur="1.1s" repeatCount="indefinite"/>`:''}</line>
-<text x="930" y="265" text-anchor="middle" fill="#63AEC9" font-size="32" font-weight="800" opacity="${a?1:.6}">Moving Robot</text>${a?`${mkGlow(780,30,300,280,10,'#63AEC9')}${mkScan(781,31,298,278,'#63AEC9')}${mkBadge(786,35,'#1b4660')}`:''}`;
+const MACHINE_PROFILE = {
+  4:{type:'loader',  x:10,   y:30, w:330, h:280, col:'#69B8D6', label:'Auto Loader', badge:'LOADER'},
+  3:{type:'cutting', x:410,  y:30, w:300, h:280, col:'#73C59B', label:'Cutting M/C', badge:'CUT'},
+  2:{type:'marking', x:780,  y:30, w:300, h:280, col:'#D39D63', label:'Laser Marking', badge:'MARK'},
+  5:{type:'robot',   x:780,  y:30, w:300, h:280, col:'#63AEC9', label:'Moving Robot', badge:'ROBOT'},
+  1:{type:'bending1',x:1150, y:30, w:400, h:280, col:'#9285D4', label:'Bending M/C #1', badge:'B1'},
+  6:{type:'bending2',x:1150, y:30, w:400, h:280, col:'#9285D4', label:'Bending M/C #2', badge:'B2'},
+};
+const MACHINE_LINE_ID_BY_STEP = {4:'loader',3:'cutting',2:'marking',5:'robot',1:'bending1',6:'bending2'};
+const MACHINE_LINE_NAME_BY_STEP = {4:'Auto Loader',3:'Cutting M/C',2:'Laser Marking',5:'Moving Robot',1:'Bending M/C #1',6:'Bending M/C #2'};
+const MACHINE_LINE_MODE_PRESET = {
+  admin:{msvgMode:'dashboard', pipeLayer:'fixedPipeLayerDash', dotLayer:'fixedPipeDotLayerDash', label:'admin'},
+  operation:{msvgMode:'operation', pipeLayer:'fixedPipeLayerOperation', dotLayer:'fixedPipeDotLayerOperation', label:'operation'},
+  'settings-preview':{msvgMode:'operation', pipeLayer:'fixedPipeLayerSettingPreview', dotLayer:'fixedPipeDotLayerSettingPreview', label:'settings-preview'},
+};
+function buildMachineLineModel(activeSteps, slots=null){
+  const steps = Array.isArray(activeSteps) ? activeSteps.slice() : [];
+  const machines = steps.map((stepId, idx)=>{
+    const machineId = MACHINE_ID_MAP[stepId];
+    const st = machineId ? machSt[machineId] : null;
+    const running = !!(slots && slots[stepId]);
+    const status = getMachineVisualState(stepId, running);
+    const type = MACHINE_LINE_ID_BY_STEP[stepId] || 'default';
+    return {
+      stepId,
+      id:type,
+      name:MACHINE_LINE_NAME_BY_STEP[stepId] || `Machine ${stepId}`,
+      type,
+      order:idx+1,
+      status,
+      commStatus:(st && st.connected) ? 'ok' : 'offline',
+      currentJobId: running && slots && slots[stepId] ? PIPE_DATA[slots[stepId].pipeIdx % PIPE_DATA.length].id : '',
+      image: `${MACHINE_ASSET_BASE}${MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default}`
+    };
+  });
+  const pipeSegments = machines.slice(0,-1).map((m, idx)=>{
+    const next = machines[idx+1];
+    const running = m.status==='running' || next.status==='running';
+    return {from:m.id,to:next.id,status:running?'running':'idle'};
+  });
+  return {machines, pipeSegments};
+}
+function renderMachineLineView(containerId, machines, options={}){
+  const mode = options.mode || 'admin';
+  const preset = MACHINE_LINE_MODE_PRESET[mode] || MACHINE_LINE_MODE_PRESET.admin;
+  const steps = machines.map(m=>m.stepId);
+  const statusMap = {};
+  machines.forEach(m=>{ statusMap[m.stepId] = m.status; });
+  if(options.view==='flow'){
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const el=document.getElementById('mach'+stepId); if(!el) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine){
+        el.style.opacity='1';
+        el.style.pointerEvents='auto';
+        el.style.filter='none';
+        el.style.display='';
+        el.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+      }else{
+        el.style.display='none';
+      }
+    });
+    const svg=document.getElementById(containerId);
+    if(svg){
+      renderFixedMachinePipeLine(svg, steps, {layerId:preset.pipeLayer});
+      renderMachineStatusDots(svg, steps, {layerId:preset.dotLayer, statusMap});
+    }
+    return;
+  }
+  if(options.view==='operation'){
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const svg=document.getElementById('opMach'+stepId); if(!svg) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine){
+        const activeFlag = machine.status==='running' ? '1' : '0';
+        if(svg.dataset.machineActive !== activeFlag || svg.dataset.machineState !== machine.status){
+          svg.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+          svg.dataset.machineActive = activeFlag;
+          svg.dataset.machineState = machine.status;
+        }
+      }
+    });
+    return;
+  }
+  if(options.view==='worker'){
+    const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const g=document.getElementById(wMap[stepId]); if(!g) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine) g.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+    });
+  }
+}
+function getMachineAssetPair(type){
+  const primary = MACHINE_ASSET_BASE + (MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default);
+  const fallback = MACHINE_ASSET_BASE + MACHINE_ASSET_MAP.default;
+  return {primary, fallback, inline: MACHINE_INLINE_PLACEHOLDER};
+}
+function buildMachineAssetSvg(stepId, active=false, mode='dashboard', state='idle'){
+  const p = MACHINE_PROFILE[stepId];
+  if(!p) return '';
+  const as = getMachineAssetPair(p.type);
+  const pad = mode==='dashboard' ? 16 : 26;
+  const imgX = p.x + pad;
+  const imgY = p.y + pad + (mode==='dashboard' ? 10 : 16);
+  const imgW = p.w - (pad*2);
+  const imgH = p.h - (pad*2) - (mode==='dashboard' ? 46 : 56);
+  const stCol = state==='alarm' ? '#D96E7B' : state==='offline' ? '#7F8894' : (active ? '#48D597' : p.col);
+  const stOpacity = state==='offline' ? 0.35 : 1;
+  const glow = active ? `filter="drop-shadow(0 0 8px #48D597)"` : '';
+  const badge = `<rect x="${p.x+12}" y="${p.y+10}" width="66" height="22" rx="5" fill="#0f1b2a" fill-opacity=".76" stroke="${stCol}" stroke-opacity=".65"/><text x="${p.x+45}" y="${p.y+25}" text-anchor="middle" fill="${stCol}" font-size="12" font-weight="800">${p.badge}</text>`;
+  const label = `<text x="${p.x+p.w/2}" y="${p.y+p.h-14}" text-anchor="middle" fill="${stCol}" font-size="${mode==='dashboard'?24:20}" font-weight="800" opacity="${active?0.95:0.7}">${p.label}</text>`;
+  const imgTag = `
+    <foreignObject x="${imgX}" y="${imgY}" width="${imgW}" height="${imgH}">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="machine-asset-box">
+        <img class="machine-asset machine-asset-fallback" src="${as.inline}" alt="${p.label} 기본 이미지" />
+        <img class="machine-asset machine-asset-fallback" src="${as.fallback}" alt="${p.label} 기본 에셋" />
+        <img class="machine-asset" src="${as.primary}" alt="${p.label} 설비 이미지" onerror="this.style.display='none';" />
+      </div>
+    </foreignObject>`;
+  return `
+    <g data-machine-step="${stepId}" data-machine-state="${state}" opacity="${stOpacity}" ${glow}>
+      <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="10" fill="#0D151F" stroke="${stCol}" stroke-width="${active?3:1.6}" stroke-opacity="${active?1:.5}"/>
+      <rect x="${p.x+2}" y="${p.y+2}" width="${p.w-4}" height="${p.h-4}" rx="9" fill="rgba(19,30,42,0.75)" stroke="rgba(143,170,193,0.2)"/>
+      ${imgTag}
+      ${badge}
+      ${label}
+      ${active ? mkGlow(p.x,p.y,p.w,p.h,10,'#48D597') : ''}
+    </g>`;
+}
+const MSVG={
+  1:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(1,a,m,s),
+  2:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(2,a,m,s),
+  3:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(3,a,m,s),
+  4:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(4,a,m,s),
+  5:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(5,a,m,s),
+  6:(a,m='dashboard',s='idle')=>buildMachineAssetSvg(6,a,m,s),
+};
 
 const FLOW_MACHINE_BBOX = {
   4:{x:10,y:30,w:330,h:280},
@@ -2782,7 +2882,7 @@ function updateFlow(n){
 
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById('mach'+i); if(!el) return;
-    el.innerHTML=MSVG[i](n===i);  // 그림은 항상 렌더
+    el.innerHTML=MSVG[i](n===i,'dashboard', getMachineVisualState(i, n===i));  // 그림은 항상 렌더
     if(active.includes(i)){
       // 활성 머신: 정상 표시
       el.style.opacity='1';
@@ -3309,8 +3409,9 @@ function applyConfigToOperation(){
         const svg=document.getElementById('opMach'+i);
         if(svg){
           const activeFlag = currentStep===i ? '1' : '0';
-          svg.innerHTML=MSVG[i](currentStep===i);
+          svg.innerHTML=MSVG[i](currentStep===i,'operation', getMachineVisualState(i, currentStep===i));
           svg.dataset.machineActive = activeFlag;
+          svg.dataset.machineState = getMachineVisualState(i, currentStep===i);
         }
       } else {
         wrap.style.display='none';
@@ -3362,6 +3463,9 @@ function applyConfigToOperation(){
   if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
 
   applyConfigToWorkerLayout(active);
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
   restoreSimulationVisualState();
 }
@@ -3693,59 +3797,107 @@ function ensurePipeDefs(svg){
   flt.appendChild(bl); defs.appendChild(flt);
 }
 
-// ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
-function buildMovingPipe(svg){
+const PIPE_STATUS_COLORS = {
+  running: '#48D597',
+  idle: '#7F8894',
+  alarm: '#D96E7B',
+  done: '#63AEC9'
+};
+
+function renderFixedMachinePipeLine(svg, machines, options={}){
+  if(!svg) return null;
   ensurePipeDefs(svg);
-  const old=document.getElementById('movingPipe'); if(old) old.remove();
+  const layerId = options.layerId || 'fixedPipeLayer';
+  let layer = svg.querySelector('#'+layerId);
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.id=layerId;
+    layer.setAttribute('data-fixed-pipe','1');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer);
+  }
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
   const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id='movingPipe';
-  const r=CONV_H/2, L=PIPE_LEN, y=CONV_Y, h=CONV_H;
+  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
+  const y = options.y ?? CONV_Y;
+  const h = options.h ?? CONV_H;
+  const r = h/2;
+  const L = options.length ?? PIPE_LEN;
   function mk(tag,attrs){
     const el=document.createElementNS(NS,tag);
     Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
     return el;
   }
-  // 바닥 그림자
-  g.appendChild(mk('rect',{x:'2',y:String(y+h+2),width:String(L),height:'8',
-    rx:String(r),fill:'rgba(0,0,0,0.45)',filter:'url(#mpSh)'}));
-  // 본체
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),
-    rx:String(r),fill:'url(#mpGrad)'}));
-  // 상단 하이라이트
-  g.appendChild(mk('rect',{x:'5',y:String(y+2),width:String(L-10),height:String((h*0.3)|0),
-    rx:String(r),fill:'rgba(255,255,255,0.62)'}));
-  // 하단 반사
-  g.appendChild(mk('rect',{x:'7',y:String(y+h-5),width:String(L-14),height:'4',
-    rx:'2',fill:'rgba(0,0,0,0.3)'}));
-  // 용접 이음새
-  for(let i=28;i<L-28;i+=24){
-    g.appendChild(mk('rect',{x:String(i),y:String(y+(h/2-1)|0),
-      width:'12',height:'2',rx:'1',fill:'rgba(255,255,255,0.25)'}));
-  }
-  // 왼쪽 끝 캡
-  g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),
-    fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  // 오른쪽 끝 캡
-  g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),
-    fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+  drawSteps.forEach(stepId=>{
+    const x = PIPE_DWELL[stepId] ?? PIPE_DWELL.start ?? 0;
+    const g=document.createElementNS(NS,'g');
+    g.setAttribute('data-fixed-pipe-step', String(stepId));
+    g.appendChild(mk('rect',{x:String(x+2),y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#mpSh)'}));
+    g.appendChild(mk('rect',{x:String(x),y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#mpGrad)'}));
+    g.appendChild(mk('rect',{x:String(x+5),y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
+    g.appendChild(mk('rect',{x:String(x+7),y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
+    for(let i=26;i<L-26;i+=22){
+      g.appendChild(mk('rect',{x:String(x+i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
+    }
+    g.appendChild(mk('ellipse',{cx:String(x+3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+    g.appendChild(mk('ellipse',{cx:String(x+L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+    layer.appendChild(g);
+  });
+  return layer;
+}
 
-  g.setAttribute('transform',`translate(${pipeCurX},0)`);
-  svg.appendChild(g);
-  pipeEl=g;
+function renderMachineStatusDots(svg, machines, options={}){
+  if(!svg) return null;
+  const layerId = options.layerId || 'fixedPipeDotLayer';
+  let layer = svg.querySelector('#'+layerId);
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.id=layerId;
+    layer.setAttribute('data-fixed-pipe-dot','1');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer);
+  }
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
+  const NS='http://www.w3.org/2000/svg';
+  const states = options.statusMap || {};
+  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
+  const y = options.y ?? CONV_Y;
+  const h = options.h ?? CONV_H;
+  const cy = y + h/2;
+  drawSteps.forEach(stepId=>{
+    const x = (PIPE_DWELL[stepId] ?? 0) + (options.length ?? PIPE_LEN) / 2;
+    const st = states[stepId] || 'idle';
+    const color = PIPE_STATUS_COLORS[st] || PIPE_STATUS_COLORS.idle;
+    const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx', String(x));
+    c.setAttribute('cy', String(cy));
+    c.setAttribute('r', st==='running' ? '7' : '5');
+    c.setAttribute('fill', color);
+    c.setAttribute('stroke', 'rgba(255,255,255,0.55)');
+    c.setAttribute('stroke-width', '1');
+    if(st==='running'){
+      c.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+    }else if(st==='alarm'){
+      c.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+    }
+    layer.appendChild(c);
+  });
+  return layer;
+}
+
+// ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
+function buildMovingPipe(svg){
+  const lineModel = buildMachineLineModel(getActiveSteps(), stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
+  pipeEl = null;
 }
 
 // ── 배관 x위치 애니메이션 ──
 function movePipeTo(targetX, dur, cb){
-  if(!pipeEl){if(cb)cb();return;}
-  const sx=pipeCurX, dist=targetX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    const p=Math.min((now-t0)/dur,1);
-    pipeCurX=sx+dist*ease(p);
-    if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{pipeCurX=targetX; if(cb)cb();}
-  })(performance.now());
+  pipeCurX = pipeCurX;
+  if(typeof cb==='function') cb();
 }
 
 // ── Operation 밴딩 머신 애니메이션 (현재 선택 배관 shape 사용) ──
@@ -3823,6 +3975,14 @@ window.__lineState = {
 
 // 머신 번호 → ID 매핑
 const MACHINE_ID_MAP = {4:'LOADER', 3:'CUTTING', 2:'LASER', 5:'ROBOT', 1:'BENDING', 6:'BENDING2'};
+function getMachineVisualState(stepId, active=false){
+  const machineId = MACHINE_ID_MAP[stepId];
+  const st = machineId ? machSt[machineId] : null;
+  if(st && st.connected===false) return 'offline';
+  if(st && st.alarm) return 'alarm';
+  if(active) return 'running';
+  return 'idle';
+}
 
 function stopLoaderPrefetch(){
   if(loaderPrefetchTimer){
@@ -3908,6 +4068,8 @@ function chooseReadyBending(active){
 
 function updatePipelineVisual(){
   const active = getActiveSteps();
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
   const occupied = active.filter(s=>stageSlots[s]);
   const lead = occupied.length ? occupied[occupied.length-1] : 0;
   currentStep = lead || 0;
@@ -6440,23 +6602,8 @@ function applyConfigToDashboard(){
   const flowLayout = applyFlowMachineLayout(active);
   applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
   applyDynamicPipeDwell(flowLayout.centerMap);
-
-  [1,2,3,4,5,6].forEach(i=>{
-    const el=document.getElementById('mach'+i); if(!el) return;
-    if(active.includes(i)){
-      // ── 활성 머신: 정상 표시, 애니메이션 있음 ──
-      el.style.opacity='1';
-      el.style.pointerEvents='auto';
-      el.style.filter='none';
-      el.innerHTML=MSVG[i](false);
-    } else {
-      // ── 비활성 머신: 그림 유지, 흐리게 처리, 애니메이션 없음 ──
-      el.style.opacity='0.2';
-      el.style.pointerEvents='none';
-      el.style.filter='grayscale(100%) brightness(0.4)';
-      el.innerHTML=MSVG[i](false);  // 그림은 그대로 표시
-    }
-  });
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
 
   // 화살표(머신 간 연결선): 현재 활성 라인 수에 맞춰 가시화/디밍
   for(let i=1;i<=5;i++){
@@ -6817,17 +6964,28 @@ function buildWorkerStraightPipe(svg, gId, startX){
 }
 
 function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
-  if(!g) return;
-  const sx=fromX, dist=toX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    if(flagFn&&!flagFn()) return;
-    const p=Math.min((now-t0)/dur,1);
-    const cx=sx+dist*ease(p);
-    g.setAttribute('transform',`translate(${cx},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{g.setAttribute('transform',`translate(${toX},0)`);if(cb)cb();}
-  })(performance.now());
+  if(!g){ if(cb) cb(); return; }
+  g.setAttribute('transform',`translate(${toX},0)`);
+  if(cb) cb();
+}
+
+function renderMachinePipeStatusDot(svg, dotId, x, status){
+  const layer = ensureMachPipeLayer(svg);
+  const old = layer.querySelector('#'+dotId);
+  if(old) old.remove();
+  const NS='http://www.w3.org/2000/svg';
+  const dot=document.createElementNS(NS,'circle');
+  dot.id = dotId;
+  dot.setAttribute('cx', String(x + (PIPE_LEN/2)));
+  dot.setAttribute('cy', String(CONV_Y + CONV_H/2));
+  dot.setAttribute('r', status==='running' ? '7' : '5');
+  const col = PIPE_STATUS_COLORS[status] || PIPE_STATUS_COLORS.idle;
+  dot.setAttribute('fill', col);
+  dot.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+  dot.setAttribute('stroke-width', '1');
+  if(status==='running') dot.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+  if(status==='alarm') dot.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+  layer.appendChild(dot);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6839,13 +6997,15 @@ const _machPipeAnimState = {}; // key: pipeId(wPipe1/oPipe1...) -> {active:boole
 function updateWorkerMachines(step, slots=null){
   const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
   const activeSet=new Set(getActiveSteps());
+  const lineModel = buildMachineLineModel([...activeSet], slots);
+  renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById(wMap[i]); if(!el) return;
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
-    el.innerHTML=MSVG[i](machineActive);
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
@@ -6858,10 +7018,7 @@ function updateWorkerMachines(step, slots=null){
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
     const activeFlag = machineActive ? '1' : '0';
-    if(svg.dataset.machineActive !== activeFlag){
-      svg.innerHTML=MSVG[i](machineActive);   // 상태 변화 시에만 재렌더
-      svg.dataset.machineActive = activeFlag;
-    }
+    svg.dataset.machineActive = activeFlag;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
     _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
@@ -6878,13 +7035,19 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
     if(st.active){
       const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
       const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
+      const oldD=svg.querySelector('#'+pipeId+'Dot'); if(oldD) oldD.remove();
       st.active=false; st.pipeIdx=null;
     }
     if(!isConfigured){
       const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
       const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
+      const ghostD=svg.querySelector('#'+pipeId+'Dot'); if(ghostD) ghostD.remove();
       return;
     }
+    const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
+    const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
+    buildWorkerStraightPipe(svg, pipeId, dwellX);
+    renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'idle');
     return;
   }
 
@@ -6905,33 +7068,12 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
   st.active=true;
   st.pipeIdx=visualPipeIdx;
 
-  // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
-  // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
   const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
-  const entryX = vbLeft - PIPE_LEN - 30;   // 화면 왼쪽 바깥
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
+  buildWorkerStraightPipe(svg, pipeId, dwellX);
+  renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'running');
 
-  const pg = buildWorkerStraightPipe(svg, pipeId, entryX);
-
-  if(machIdx === 1 || machIdx === 6){
-    // 밴딩 머신: 진입 후 shape 애니메이션
-    const pipe = PIPE_DATA[visualPipeIdx % PIPE_DATA.length];
-    const nums = pipe.id.match(/\d+/g);
-    const shIdx = nums ? parseInt(nums[nums.length-1]) % SHAPES.length : 0;
-    const shape = SHAPES[shIdx];
-
-    animWorkerPipeEntry(pg, entryX, dwellX, 900, flagFn, ()=>{
-      if(!flagFn()){ pg.remove(); return; }
-      // 직선 배관 페이드아웃 → bent shape 그리기
-      pg.style.transition='opacity 0.25s'; pg.style.opacity='0';
-      setTimeout(()=>{ if(pg.parentNode) pg.remove(); }, 250);
-      // 밴딩 shape 애니메이션 (bendId 사용)
-      _playMachBendAnim(svg, bendId, shape, flagFn);
-    });
-  } else {
-    // 일반 머신: 진입 후 정지 유지
-    animWorkerPipeEntry(pg, entryX, dwellX, 700, flagFn, null);
-  }
+  const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
 }
 
 // ── 내부 헬퍼: 밴딩 shape 경로 애니메이션 (벤딩ID 외부 지정) ──
@@ -7020,6 +7162,7 @@ function syncWorkerBtn(running){
 // 14. WINDOW ONLOAD
 // ═══════════════════════════════════════════════════════════════
 window.onload=function(){
+  console.info('[UI BUILD]', UI_BUILD_VERSION);
   applyRoleDensity('admin');
   initTheme();
   updateClock();

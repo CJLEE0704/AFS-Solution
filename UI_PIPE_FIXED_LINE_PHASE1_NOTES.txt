@@ -1,0 +1,40 @@
+[UI Pipe Fixed Line Phase1 변경 요약]
+
+1) 비활성화/고정화한 기존 이동 배관 로직
+- dashMovingPipe 생성/이동 경로:
+  - ensureDashPipe() 내부의 이동형 dashMovingPipe 생성 제거
+  - moveDashPipeTo()를 no-op(콜백만 유지)로 전환
+- movingPipe 생성/이동 경로:
+  - buildMovingPipe()를 고정형 공통 렌더 호출로 전환
+  - movePipeTo()를 no-op(콜백만 유지)로 전환
+- pipeCurX / dashPipeCurX는 레거시 호환용으로만 유지(이동 표현에는 미사용)
+
+2) 신규 공통 고정형 배관/상태 점 로직
+- renderFixedMachinePipeLine(svg, machines, options)
+  - 장비 구간별 은색 고정 배관 라인을 렌더
+- renderMachineStatusDots(svg, machines, options)
+  - 상태 점(녹색/회색/빨강/청록)을 공통 렌더
+- PIPE_STATUS_COLORS
+  - running: 녹색
+  - idle: 회색
+  - alarm: 빨강
+  - done: 청록
+
+3) 화면별 적용
+- Admin/Dashboard(flowSvg)
+  - updatePipelineVisual()에서 활성 장비 목록 기준으로 고정 배관 + 상태 점 공통 렌더
+- Operation 진입(setMenu)
+  - 기존 movingPipe 복원 로직 대신 buildMovingPipe()의 고정형 렌더 결과 사용
+- Worker/Operation 머신 카드
+  - _animMachPipe()에서 진입 이동/우측 이동 애니메이션 제거
+  - 머신별 고정 배관과 상태 점(동시 Running 가능) 렌더
+
+4) 레이아웃 영향
+- 좌측 메뉴, KPI, 프로젝트 리스트, 우측 상세 패널 등 기존 화면 구조 변경 없음
+- 배관 표시 로직만 고정형으로 정리
+
+5) 회귀 점검 포인트
+- 배관이 우측으로 이동하지 않는지
+- 화면 전환 시 movingPipe/dashMovingPipe 재생성 여부
+- Admin/Dashboard와 Worker/Operation 배관 표시 개념 일치 여부
+- Start/Pause/Stop, 상태 표시, 머신 선택 동작 및 콘솔 오류 확인

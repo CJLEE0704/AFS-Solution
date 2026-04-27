@@ -675,9 +675,9 @@ namespace PipeBendingDashboard
             try
             {
                 var d = JsonSerializer.Deserialize<JsonElement>(dataJson);
-                userId = d.GetProperty("id").GetString() ?? "";
-                var pw = d.GetProperty("pw").GetString() ?? "";
-                reqId = d.TryGetProperty("reqId", out var rq) ? rq.GetString() ?? "" : "";
+                userId = _jsonToString(d.GetProperty("id"));
+                var pw = _jsonToString(d.GetProperty("pw"));
+                reqId = d.TryGetProperty("reqId", out var rq) ? _jsonToString(rq) : "";
 
                 if (_db == null || !_db.IsAvailable)
                 {
@@ -730,6 +730,18 @@ namespace PipeBendingDashboard
                 }
                 catch { }
             }
+        }
+
+        private static string _jsonToString(JsonElement el)
+        {
+            return el.ValueKind switch
+            {
+                JsonValueKind.String => el.GetString() ?? "",
+                JsonValueKind.Number => el.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => el.GetRawText()
+            };
         }
 
         private async Task HandleRequestUsersFromDbAsync()

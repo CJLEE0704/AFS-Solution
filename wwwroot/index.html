@@ -2306,11 +2306,8 @@ function startDashAuto(){
 let dashPipeEl=null, dashPipeCurX=-270;
 
 function ensureDashPipe(svg){
-  const active = getActiveSteps();
-  const stateMap = {};
-  active.forEach(stepId=>{ stateMap[stepId] = stageSlots && stageSlots[stepId] ? 'running' : 'idle'; });
-  renderFixedMachinePipeLine(svg, active, {layerId:'fixedPipeLayerDash'});
-  renderMachineStatusDots(svg, active, {layerId:'fixedPipeDotLayerDash', statusMap:stateMap});
+  const lineModel = buildMachineLineModel(getActiveSteps(), stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
   dashPipeEl = null;
 }
 
@@ -2612,6 +2609,91 @@ const MACHINE_PROFILE = {
   1:{type:'bending1',x:1150, y:30, w:400, h:280, col:'#9285D4', label:'Bending M/C #1', badge:'B1'},
   6:{type:'bending2',x:1150, y:30, w:400, h:280, col:'#9285D4', label:'Bending M/C #2', badge:'B2'},
 };
+const MACHINE_LINE_ID_BY_STEP = {4:'loader',3:'cutting',2:'marking',5:'robot',1:'bending1',6:'bending2'};
+const MACHINE_LINE_NAME_BY_STEP = {4:'Auto Loader',3:'Cutting M/C',2:'Laser Marking',5:'Moving Robot',1:'Bending M/C #1',6:'Bending M/C #2'};
+const MACHINE_LINE_MODE_PRESET = {
+  admin:{msvgMode:'dashboard', pipeLayer:'fixedPipeLayerDash', dotLayer:'fixedPipeDotLayerDash', label:'admin'},
+  operation:{msvgMode:'operation', pipeLayer:'fixedPipeLayerOperation', dotLayer:'fixedPipeDotLayerOperation', label:'operation'},
+  'settings-preview':{msvgMode:'operation', pipeLayer:'fixedPipeLayerSettingPreview', dotLayer:'fixedPipeDotLayerSettingPreview', label:'settings-preview'},
+};
+function buildMachineLineModel(activeSteps, slots=null){
+  const steps = Array.isArray(activeSteps) ? activeSteps.slice() : [];
+  const machines = steps.map((stepId, idx)=>{
+    const machineId = MACHINE_ID_MAP[stepId];
+    const st = machineId ? machSt[machineId] : null;
+    const running = !!(slots && slots[stepId]);
+    const status = getMachineVisualState(stepId, running);
+    const type = MACHINE_LINE_ID_BY_STEP[stepId] || 'default';
+    return {
+      stepId,
+      id:type,
+      name:MACHINE_LINE_NAME_BY_STEP[stepId] || `Machine ${stepId}`,
+      type,
+      order:idx+1,
+      status,
+      commStatus:(st && st.connected) ? 'ok' : 'offline',
+      currentJobId: running && slots && slots[stepId] ? PIPE_DATA[slots[stepId].pipeIdx % PIPE_DATA.length].id : '',
+      image: `${MACHINE_ASSET_BASE}${MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default}`
+    };
+  });
+  const pipeSegments = machines.slice(0,-1).map((m, idx)=>{
+    const next = machines[idx+1];
+    const running = m.status==='running' || next.status==='running';
+    return {from:m.id,to:next.id,status:running?'running':'idle'};
+  });
+  return {machines, pipeSegments};
+}
+function renderMachineLineView(containerId, machines, options={}){
+  const mode = options.mode || 'admin';
+  const preset = MACHINE_LINE_MODE_PRESET[mode] || MACHINE_LINE_MODE_PRESET.admin;
+  const steps = machines.map(m=>m.stepId);
+  const statusMap = {};
+  machines.forEach(m=>{ statusMap[m.stepId] = m.status; });
+  if(options.view==='flow'){
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const el=document.getElementById('mach'+stepId); if(!el) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine){
+        el.style.opacity='1';
+        el.style.pointerEvents='auto';
+        el.style.filter='none';
+        el.style.display='';
+        el.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+      }else{
+        el.style.display='none';
+      }
+    });
+    const svg=document.getElementById(containerId);
+    if(svg){
+      renderFixedMachinePipeLine(svg, steps, {layerId:preset.pipeLayer});
+      renderMachineStatusDots(svg, steps, {layerId:preset.dotLayer, statusMap});
+    }
+    return;
+  }
+  if(options.view==='operation'){
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const svg=document.getElementById('opMach'+stepId); if(!svg) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine){
+        const activeFlag = machine.status==='running' ? '1' : '0';
+        if(svg.dataset.machineActive !== activeFlag || svg.dataset.machineState !== machine.status){
+          svg.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+          svg.dataset.machineActive = activeFlag;
+          svg.dataset.machineState = machine.status;
+        }
+      }
+    });
+    return;
+  }
+  if(options.view==='worker'){
+    const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
+    [1,2,3,4,5,6].forEach(stepId=>{
+      const g=document.getElementById(wMap[stepId]); if(!g) return;
+      const machine = machines.find(m=>m.stepId===stepId);
+      if(machine) g.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
+    });
+  }
+}
 function getMachineAssetPair(type){
   const primary = MACHINE_ASSET_BASE + (MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default);
   const fallback = MACHINE_ASSET_BASE + MACHINE_ASSET_MAP.default;
@@ -3328,6 +3410,7 @@ function applyConfigToOperation(){
           const activeFlag = currentStep===i ? '1' : '0';
           svg.innerHTML=MSVG[i](currentStep===i,'operation', getMachineVisualState(i, currentStep===i));
           svg.dataset.machineActive = activeFlag;
+          svg.dataset.machineState = getMachineVisualState(i, currentStep===i);
         }
       } else {
         wrap.style.display='none';
@@ -3379,6 +3462,9 @@ function applyConfigToOperation(){
   if(cfgFlow) cfgFlow.textContent=active.map(s=>STEP_LABEL[s]).join(' → ');
 
   applyConfigToWorkerLayout(active);
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
   restoreSimulationVisualState();
 }
@@ -3802,13 +3888,8 @@ function renderMachineStatusDots(svg, machines, options={}){
 
 // ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
 function buildMovingPipe(svg){
-  const active = getActiveSteps();
-  const stateMap = {};
-  active.forEach(stepId=>{
-    stateMap[stepId] = stageSlots && stageSlots[stepId] ? 'running' : 'idle';
-  });
-  renderFixedMachinePipeLine(svg, active, {layerId:'fixedPipeLayerAdmin'});
-  renderMachineStatusDots(svg, active, {layerId:'fixedPipeDotLayerAdmin', statusMap:stateMap});
+  const lineModel = buildMachineLineModel(getActiveSteps(), stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
   pipeEl = null;
 }
 
@@ -3986,6 +4067,8 @@ function chooseReadyBending(active){
 
 function updatePipelineVisual(){
   const active = getActiveSteps();
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
   const occupied = active.filter(s=>stageSlots[s]);
   const flowSvg=document.getElementById('flowSvg');
   if(flowSvg){
@@ -6527,23 +6610,8 @@ function applyConfigToDashboard(){
   const flowLayout = applyFlowMachineLayout(active);
   applyFlowArrowLayout(flowLayout.activeIds, flowLayout.centerMap, flowLayout.centerYMap);
   applyDynamicPipeDwell(flowLayout.centerMap);
-
-  [1,2,3,4,5,6].forEach(i=>{
-    const el=document.getElementById('mach'+i); if(!el) return;
-    if(active.includes(i)){
-      // ── 활성 머신: 정상 표시, 애니메이션 있음 ──
-      el.style.opacity='1';
-      el.style.pointerEvents='auto';
-      el.style.filter='none';
-      el.innerHTML=MSVG[i](false,'dashboard', getMachineVisualState(i, false));
-    } else {
-      // ── 비활성 머신: 그림 유지, 흐리게 처리, 애니메이션 없음 ──
-      el.style.opacity='0.2';
-      el.style.pointerEvents='none';
-      el.style.filter='grayscale(100%) brightness(0.4)';
-      el.innerHTML=MSVG[i](false,'dashboard', getMachineVisualState(i, false));  // 그림은 그대로 표시
-    }
-  });
+  const lineModel = buildMachineLineModel(active, stageSlots);
+  renderMachineLineView('flowSvg', lineModel.machines, {mode:'admin', view:'flow'});
 
   // 화살표(머신 간 연결선): 현재 활성 라인 수에 맞춰 가시화/디밍
   for(let i=1;i<=5;i++){
@@ -6937,13 +7005,15 @@ const _machPipeAnimState = {}; // key: pipeId(wPipe1/oPipe1...) -> {active:boole
 function updateWorkerMachines(step, slots=null){
   const wMap={1:'wm1',2:'wm2',3:'wm3',4:'wm4',5:'wm5',6:'wm6'};
   const activeSet=new Set(getActiveSteps());
+  const lineModel = buildMachineLineModel([...activeSet], slots);
+  renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
     const el=document.getElementById(wMap[i]); if(!el) return;
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
-    el.innerHTML=MSVG[i](machineActive,'worker', getMachineVisualState(i, machineActive));
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
@@ -6956,10 +7026,7 @@ function updateWorkerMachines(step, slots=null){
     const stagePipeIdx = slots && slots[i] ? slots[i].pipeIdx : null;
     const machineActive = stagePipeIdx!=null ? true : (!slots && step===i);
     const activeFlag = machineActive ? '1' : '0';
-    if(svg.dataset.machineActive !== activeFlag){
-      svg.innerHTML=MSVG[i](machineActive,'operation', getMachineVisualState(i, machineActive));   // 상태 변화 시에만 재렌더
-      svg.dataset.machineActive = activeFlag;
-    }
+    svg.dataset.machineActive = activeFlag;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
     _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음

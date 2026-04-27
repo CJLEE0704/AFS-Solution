@@ -1,0 +1,40 @@
+[UI Machine Line View Phase3 변경 요약]
+
+1) 목적
+- Admin/Dashboard, Worker/Operation에 흩어진 머신 라인 표시 로직을 공통 MachineLineView 개념으로 통합
+- 중복 렌더링 코드를 줄이고, 설정 기반 머신 구성/순서/상태가 화면별로 일관되게 반영되도록 정리
+
+2) 공통 데이터/렌더 구조 추가 (wwwroot/index.html)
+- 공통 데이터 구조
+  - buildMachineLineModel(activeSteps, slots)
+    - machines 배열 생성
+      - id, name, type, order, status, commStatus, currentJobId, image 포함
+    - pipeSegments 배열 생성
+      - from, to, status 포함
+- 공통 렌더 함수
+  - renderMachineLineView(containerId, machines, options)
+    - options.mode: admin / operation / settings-preview
+    - options.view: flow / operation / worker
+
+3) 공통 기반으로 변경된 호출 경로
+- applyConfigToDashboard()
+  - 개별 머신 루프 렌더 대신 buildMachineLineModel + renderMachineLineView(flow) 사용
+- applyConfigToOperation()
+  - 공통 모델 기반으로 operation/worker 라인뷰 렌더 호출 추가
+- updateWorkerMachines()
+  - 공통 모델 기반으로 operation/worker 머신 이미지 렌더 일원화
+- updatePipelineVisual()
+  - 공통 모델 기반 flow 라인뷰 렌더로 통합
+- ensureDashPipe(), buildMovingPipe()
+  - 기존 개별 고정 배관 호출 대신 공통 MachineLineView 렌더 경로 사용
+
+4) 상태/표시 규칙
+- getMachineVisualState(stepId, active) 기반 상태 매핑 유지
+  - running / idle / alarm / offline
+- Bending 1/2는 기존 이미지 배지(B1/B2)로 구분
+- 배관은 은색 고정 라인 유지(이동형 pipe object 재도입 없음)
+
+5) 기대 효과
+- 화면별 별도 복사 코드 감소
+- 설정에서 머신 구성/순서 변경 시 Dashboard/Operation/Worker 일관 반영
+- 향후 Settings Preview 연결 시 mode='settings-preview'로 동일 렌더 체계 재사용 가능

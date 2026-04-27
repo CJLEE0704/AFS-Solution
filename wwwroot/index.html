@@ -1802,7 +1802,7 @@ function doLogin(){
 
   // DB 전용 인증 (WebView2 환경)
   if(window.chrome?.webview){
-    const reqId = (++_loginReqSeq);
+    const reqId = String(++_loginReqSeq);
     if(_loginPending?.timer) clearTimeout(_loginPending.timer);
     _loginPending = { id, pw, reqId, timer: null };
     window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));

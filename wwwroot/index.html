@@ -1794,29 +1794,40 @@ function syncHostWindowChrome(){
 }
 
 function doLogin(){
-  const id=document.getElementById('loginId').value.trim();
-  const pw=document.getElementById('loginPw').value.trim();
-  if(!id || !pw){
-    _finalizeLoginFail();
-    return;
-  }
-
-  // DB 전용 인증 (WebView2 환경)
-  if(window.chrome?.webview){
-    const reqId = String(++_loginReqSeq);
-    if(_loginPending?.timer) clearTimeout(_loginPending.timer);
-    _loginPending = { id, pw, reqId, timer: null };
-    window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
-    _loginPending.timer = setTimeout(()=>{
-      if(!_loginPending || _loginPending.reqId!==reqId) return;
+  try{
+    const id=document.getElementById('loginId').value.trim();
+    const pw=document.getElementById('loginPw').value.trim();
+    if(!id || !pw){
       _finalizeLoginFail();
-      _loginPending=null;
-    }, 2500);
-    return;
-  }
+      return;
+    }
 
-  // 브라우저 단독 실행: DB 경로 없음 → 실패 처리
-  _finalizeLoginFail();
+    // DB 전용 인증 (WebView2 환경)
+    if(window.chrome?.webview){
+      const reqId = String(++_loginReqSeq);
+      if(_loginPending?.timer) clearTimeout(_loginPending.timer);
+      _loginPending = { id, pw, reqId, timer: null };
+      if(typeof window.sendToCSharp !== 'function'){
+        console.error('[AUTH] sendToCSharp 함수를 찾지 못했습니다.');
+        _finalizeLoginFail();
+        _loginPending = null;
+        return;
+      }
+      window.sendToCSharp('AUTH_LOGIN','AUTH', JSON.stringify({id,pw,reqId}));
+      _loginPending.timer = setTimeout(()=>{
+        if(!_loginPending || _loginPending.reqId!==reqId) return;
+        _finalizeLoginFail();
+        _loginPending=null;
+      }, 2500);
+      return;
+    }
+
+    // 브라우저 단독 실행: DB 경로 없음 → 실패 처리
+    _finalizeLoginFail();
+  }catch(e){
+    console.error('[doLogin] 예외', e);
+    _finalizeLoginFail();
+  }
 }
 
 function afterLogin(){

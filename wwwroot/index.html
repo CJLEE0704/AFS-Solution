@@ -2034,11 +2034,10 @@ function setMenu(id){
       if(processRunning){
         updateWorkerMachines(currentStep);
         const svg=document.getElementById('flowSvg');
-        if(svg && !document.getElementById('movingPipe')){
+        if(svg){
           buildMovingPipe(svg);
           const ptg=document.getElementById('ptg');
           if(ptg){ptg.style.opacity='0';}
-          if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
         }
       }
       restoreSimulationVisualState();
@@ -2304,51 +2303,17 @@ function startDashAuto(){
 let dashPipeEl=null, dashPipeCurX=-270;
 
 function ensureDashPipe(svg){
-  if(document.getElementById('dashMovingPipe')) return;
-  ensurePipeDefs(svg);
-  const old=document.getElementById('dashMovingPipe'); if(old) old.remove();
-  const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id='dashMovingPipe';
-  const r=CONV_H/2, L=PIPE_LEN, y=CONV_Y, h=CONV_H;
-  function mk(tag,attrs){
-    const el=document.createElementNS(NS,tag);
-    Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
-    return el;
-  }
-  g.appendChild(mk('rect',{x:'4',y:String(y+6),width:String(L),height:String(h),
-    rx:String(r),fill:'rgba(0,0,0,0.45)',filter:'url(#mpSh)'}));
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),
-    rx:String(r),fill:'url(#mpGrad)'}));
-  g.appendChild(mk('rect',{x:'6',y:String(y+2),width:String(L-12),height:String(h*0.28|0),
-    rx:String(r),fill:'rgba(255,255,255,0.58)'}));
-  g.appendChild(mk('rect',{x:'8',y:String(y+h-4),width:String(L-16),height:'3',
-    rx:'2',fill:'rgba(0,0,0,0.26)'}));
-  for(let i=24;i<L-24;i+=22){
-    g.appendChild(mk('rect',{x:String(i),y:String(y+h/2-1|0),
-      width:'14',height:'2',rx:'1',fill:'rgba(255,255,255,0.22)'}));
-  }
-  g.appendChild(mk('ellipse',{cx:'2',cy:String(y+r),rx:'5',ry:String(r-1),
-    fill:'#2E3C4A',stroke:'#5D6F81','stroke-width':'1.2'}));
-  g.appendChild(mk('ellipse',{cx:String(L-2),cy:String(y+r),rx:'5',ry:String(r-1),
-    fill:'#2E3C4A',stroke:'#5D6F81','stroke-width':'1.2'}));
-  dashPipeCurX=-270;
-  g.setAttribute('transform',`translate(${dashPipeCurX},0)`);
-  svg.appendChild(g);
-  dashPipeEl=g;
+  const active = getActiveSteps();
+  const stateMap = {};
+  active.forEach(stepId=>{ stateMap[stepId] = stageSlots && stageSlots[stepId] ? 'running' : 'idle'; });
+  renderFixedMachinePipeLine(svg, active, {layerId:'fixedPipeLayerDash'});
+  renderMachineStatusDots(svg, active, {layerId:'fixedPipeDotLayerDash', statusMap:stateMap});
+  dashPipeEl = null;
 }
 
 function moveDashPipeTo(targetX, dur, cb){
-  if(!dashPipeEl){if(cb)cb();return;}
-  const sx=dashPipeCurX, dist=targetX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    if(!dashAutoRunning) return;
-    const p=Math.min((now-t0)/dur,1);
-    dashPipeCurX=sx+dist*ease(p);
-    if(dashPipeEl) dashPipeEl.setAttribute('transform',`translate(${dashPipeCurX},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{dashPipeCurX=targetX; if(cb)cb();}
-  })(performance.now());
+  dashPipeCurX = dashPipeCurX;
+  if(typeof cb==='function') cb();
 }
 
 let dashPipeIdx = 0; // 현재 처리 중인 배관 인덱스
@@ -3693,59 +3658,112 @@ function ensurePipeDefs(svg){
   flt.appendChild(bl); defs.appendChild(flt);
 }
 
-// ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
-function buildMovingPipe(svg){
+const PIPE_STATUS_COLORS = {
+  running: '#48D597',
+  idle: '#7F8894',
+  alarm: '#D96E7B',
+  done: '#63AEC9'
+};
+
+function renderFixedMachinePipeLine(svg, machines, options={}){
+  if(!svg) return null;
   ensurePipeDefs(svg);
-  const old=document.getElementById('movingPipe'); if(old) old.remove();
+  const layerId = options.layerId || 'fixedPipeLayer';
+  let layer = svg.querySelector('#'+layerId);
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.id=layerId;
+    layer.setAttribute('data-fixed-pipe','1');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer);
+  }
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
   const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id='movingPipe';
-  const r=CONV_H/2, L=PIPE_LEN, y=CONV_Y, h=CONV_H;
+  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
+  const y = options.y ?? CONV_Y;
+  const h = options.h ?? CONV_H;
+  const r = h/2;
+  const L = options.length ?? PIPE_LEN;
   function mk(tag,attrs){
     const el=document.createElementNS(NS,tag);
     Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
     return el;
   }
-  // 바닥 그림자
-  g.appendChild(mk('rect',{x:'2',y:String(y+h+2),width:String(L),height:'8',
-    rx:String(r),fill:'rgba(0,0,0,0.45)',filter:'url(#mpSh)'}));
-  // 본체
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),
-    rx:String(r),fill:'url(#mpGrad)'}));
-  // 상단 하이라이트
-  g.appendChild(mk('rect',{x:'5',y:String(y+2),width:String(L-10),height:String((h*0.3)|0),
-    rx:String(r),fill:'rgba(255,255,255,0.62)'}));
-  // 하단 반사
-  g.appendChild(mk('rect',{x:'7',y:String(y+h-5),width:String(L-14),height:'4',
-    rx:'2',fill:'rgba(0,0,0,0.3)'}));
-  // 용접 이음새
-  for(let i=28;i<L-28;i+=24){
-    g.appendChild(mk('rect',{x:String(i),y:String(y+(h/2-1)|0),
-      width:'12',height:'2',rx:'1',fill:'rgba(255,255,255,0.25)'}));
-  }
-  // 왼쪽 끝 캡
-  g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),
-    fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  // 오른쪽 끝 캡
-  g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),
-    fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+  drawSteps.forEach(stepId=>{
+    const x = PIPE_DWELL[stepId] ?? PIPE_DWELL.start ?? 0;
+    const g=document.createElementNS(NS,'g');
+    g.setAttribute('data-fixed-pipe-step', String(stepId));
+    g.appendChild(mk('rect',{x:String(x+2),y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#mpSh)'}));
+    g.appendChild(mk('rect',{x:String(x),y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#mpGrad)'}));
+    g.appendChild(mk('rect',{x:String(x+5),y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
+    g.appendChild(mk('rect',{x:String(x+7),y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
+    for(let i=26;i<L-26;i+=22){
+      g.appendChild(mk('rect',{x:String(x+i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
+    }
+    g.appendChild(mk('ellipse',{cx:String(x+3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+    g.appendChild(mk('ellipse',{cx:String(x+L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+    layer.appendChild(g);
+  });
+  return layer;
+}
 
-  g.setAttribute('transform',`translate(${pipeCurX},0)`);
-  svg.appendChild(g);
-  pipeEl=g;
+function renderMachineStatusDots(svg, machines, options={}){
+  if(!svg) return null;
+  const layerId = options.layerId || 'fixedPipeDotLayer';
+  let layer = svg.querySelector('#'+layerId);
+  if(!layer){
+    const NS='http://www.w3.org/2000/svg';
+    layer=document.createElementNS(NS,'g');
+    layer.id=layerId;
+    layer.setAttribute('data-fixed-pipe-dot','1');
+    layer.style.pointerEvents='none';
+    svg.appendChild(layer);
+  }
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
+  const NS='http://www.w3.org/2000/svg';
+  const states = options.statusMap || {};
+  const drawSteps = Array.isArray(machines) && machines.length ? machines : Object.keys(PIPE_DWELL).map(Number).filter(Number.isFinite);
+  const y = options.y ?? CONV_Y;
+  const h = options.h ?? CONV_H;
+  const cy = y + h/2;
+  drawSteps.forEach(stepId=>{
+    const x = (PIPE_DWELL[stepId] ?? 0) + (options.length ?? PIPE_LEN) / 2;
+    const st = states[stepId] || 'idle';
+    const color = PIPE_STATUS_COLORS[st] || PIPE_STATUS_COLORS.idle;
+    const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx', String(x));
+    c.setAttribute('cy', String(cy));
+    c.setAttribute('r', st==='running' ? '7' : '5');
+    c.setAttribute('fill', color);
+    c.setAttribute('stroke', 'rgba(255,255,255,0.55)');
+    c.setAttribute('stroke-width', '1');
+    if(st==='running'){
+      c.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+    }else if(st==='alarm'){
+      c.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+    }
+    layer.appendChild(c);
+  });
+  return layer;
+}
+
+// ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
+function buildMovingPipe(svg){
+  const active = getActiveSteps();
+  const stateMap = {};
+  active.forEach(stepId=>{
+    stateMap[stepId] = stageSlots && stageSlots[stepId] ? 'running' : 'idle';
+  });
+  renderFixedMachinePipeLine(svg, active, {layerId:'fixedPipeLayerAdmin'});
+  renderMachineStatusDots(svg, active, {layerId:'fixedPipeDotLayerAdmin', statusMap:stateMap});
+  pipeEl = null;
 }
 
 // ── 배관 x위치 애니메이션 ──
 function movePipeTo(targetX, dur, cb){
-  if(!pipeEl){if(cb)cb();return;}
-  const sx=pipeCurX, dist=targetX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    const p=Math.min((now-t0)/dur,1);
-    pipeCurX=sx+dist*ease(p);
-    if(pipeEl) pipeEl.setAttribute('transform',`translate(${pipeCurX},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{pipeCurX=targetX; if(cb)cb();}
-  })(performance.now());
+  pipeCurX = pipeCurX;
+  if(typeof cb==='function') cb();
 }
 
 // ── Operation 밴딩 머신 애니메이션 (현재 선택 배관 shape 사용) ──
@@ -3909,6 +3927,15 @@ function chooseReadyBending(active){
 function updatePipelineVisual(){
   const active = getActiveSteps();
   const occupied = active.filter(s=>stageSlots[s]);
+  const flowSvg=document.getElementById('flowSvg');
+  if(flowSvg){
+    const flowStateMap={};
+    active.forEach(stepId=>{
+      flowStateMap[stepId] = stageSlots[stepId] ? 'running' : 'idle';
+    });
+    renderFixedMachinePipeLine(flowSvg, active, {layerId:'fixedPipeLayerDash'});
+    renderMachineStatusDots(flowSvg, active, {layerId:'fixedPipeDotLayerDash', statusMap:flowStateMap});
+  }
   const lead = occupied.length ? occupied[occupied.length-1] : 0;
   currentStep = lead || 0;
   if(lead){
@@ -6817,17 +6844,28 @@ function buildWorkerStraightPipe(svg, gId, startX){
 }
 
 function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
-  if(!g) return;
-  const sx=fromX, dist=toX-sx, t0=performance.now();
-  function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
-  (function fr(now){
-    if(flagFn&&!flagFn()) return;
-    const p=Math.min((now-t0)/dur,1);
-    const cx=sx+dist*ease(p);
-    g.setAttribute('transform',`translate(${cx},0)`);
-    if(p<1) requestAnimationFrame(fr);
-    else{g.setAttribute('transform',`translate(${toX},0)`);if(cb)cb();}
-  })(performance.now());
+  if(!g){ if(cb) cb(); return; }
+  g.setAttribute('transform',`translate(${toX},0)`);
+  if(cb) cb();
+}
+
+function renderMachinePipeStatusDot(svg, dotId, x, status){
+  const layer = ensureMachPipeLayer(svg);
+  const old = layer.querySelector('#'+dotId);
+  if(old) old.remove();
+  const NS='http://www.w3.org/2000/svg';
+  const dot=document.createElementNS(NS,'circle');
+  dot.id = dotId;
+  dot.setAttribute('cx', String(x + (PIPE_LEN/2)));
+  dot.setAttribute('cy', String(CONV_Y + CONV_H/2));
+  dot.setAttribute('r', status==='running' ? '7' : '5');
+  const col = PIPE_STATUS_COLORS[status] || PIPE_STATUS_COLORS.idle;
+  dot.setAttribute('fill', col);
+  dot.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+  dot.setAttribute('stroke-width', '1');
+  if(status==='running') dot.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+  if(status==='alarm') dot.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+  layer.appendChild(dot);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6878,13 +6916,19 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
     if(st.active){
       const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
       const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
+      const oldD=svg.querySelector('#'+pipeId+'Dot'); if(oldD) oldD.remove();
       st.active=false; st.pipeIdx=null;
     }
     if(!isConfigured){
       const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
       const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
+      const ghostD=svg.querySelector('#'+pipeId+'Dot'); if(ghostD) ghostD.remove();
       return;
     }
+    const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
+    const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
+    buildWorkerStraightPipe(svg, pipeId, dwellX);
+    renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'idle');
     return;
   }
 
@@ -6905,33 +6949,12 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
   st.active=true;
   st.pipeIdx=visualPipeIdx;
 
-  // 진입 시작 x (머신 왼쪽 바깥) → dwell x (머신 내 정지)
-  // viewBox 왼쪽 경계보다 PIPE_LEN만큼 왼쪽에서 시작
   const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
-  const entryX = vbLeft - PIPE_LEN - 30;   // 화면 왼쪽 바깥
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
+  buildWorkerStraightPipe(svg, pipeId, dwellX);
+  renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'running');
 
-  const pg = buildWorkerStraightPipe(svg, pipeId, entryX);
-
-  if(machIdx === 1 || machIdx === 6){
-    // 밴딩 머신: 진입 후 shape 애니메이션
-    const pipe = PIPE_DATA[visualPipeIdx % PIPE_DATA.length];
-    const nums = pipe.id.match(/\d+/g);
-    const shIdx = nums ? parseInt(nums[nums.length-1]) % SHAPES.length : 0;
-    const shape = SHAPES[shIdx];
-
-    animWorkerPipeEntry(pg, entryX, dwellX, 900, flagFn, ()=>{
-      if(!flagFn()){ pg.remove(); return; }
-      // 직선 배관 페이드아웃 → bent shape 그리기
-      pg.style.transition='opacity 0.25s'; pg.style.opacity='0';
-      setTimeout(()=>{ if(pg.parentNode) pg.remove(); }, 250);
-      // 밴딩 shape 애니메이션 (bendId 사용)
-      _playMachBendAnim(svg, bendId, shape, flagFn);
-    });
-  } else {
-    // 일반 머신: 진입 후 정지 유지
-    animWorkerPipeEntry(pg, entryX, dwellX, 700, flagFn, null);
-  }
+  const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
 }
 
 // ── 내부 헬퍼: 밴딩 shape 경로 애니메이션 (벤딩ID 외부 지정) ──

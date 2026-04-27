@@ -7092,8 +7092,6 @@ function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePi
   const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
   buildWorkerStraightPipe(svg, pipeId, dwellX);
   renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'running');
-
-  const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
 }
 
 // ── 내부 헬퍼: 밴딩 shape 경로 애니메이션 (벤딩ID 외부 지정) ──

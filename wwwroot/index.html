@@ -200,6 +200,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 .flow-row{display:grid;grid-template-columns:2fr 1fr;gap:5px;flex-shrink:0;height:280px}
 .flow-inner{background:linear-gradient(155deg,var(--hero-a),var(--hero-b));border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden;box-shadow:var(--shadow-soft)}
 .flow-svg{width:100%;height:100%}
+.machine-line-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
 .machine-asset-box{position:relative;width:100%;height:100%;overflow:hidden}
 .machine-asset{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:auto}
 .machine-asset-fallback{opacity:.92}
@@ -2695,6 +2696,10 @@ function renderMachineLineView(containerId, machines, options={}){
         }
       }
     });
+    const cardIds = machines.map(m=>'opMachWrap'+m.stepId);
+    const statusByStep = {};
+    machines.forEach(m=>{ statusByStep[m.stepId]=m.status; });
+    renderMachineLineOverlayByCards('opMachGrid', cardIds, statusByStep, {overlayId:'opMachineLineOverlay'});
     return;
   }
   if(options.view==='worker'){
@@ -2704,7 +2709,71 @@ function renderMachineLineView(containerId, machines, options={}){
       const machine = machines.find(m=>m.stepId===stepId);
       if(machine) g.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
     });
+    const cardIds = machines.map(m=>'wMach'+m.stepId);
+    const statusByStep = {};
+    machines.forEach(m=>{ statusByStep[m.stepId]=m.status; });
+    renderMachineLineOverlayByCards('workerMachCol', cardIds, statusByStep, {overlayId:'workerMachineLineOverlay'});
   }
+}
+
+function renderMachineLineOverlayByCards(containerId, cardIds, statusByStep, options={}){
+  const host=document.getElementById(containerId);
+  if(!host) return;
+  if(getComputedStyle(host).position==='static') host.style.position='relative';
+  let ov=host.querySelector('#'+(options.overlayId||'machineLineOverlay'));
+  if(!ov){
+    const NS='http://www.w3.org/2000/svg';
+    ov=document.createElementNS(NS,'svg');
+    ov.setAttribute('id', options.overlayId||'machineLineOverlay');
+    ov.setAttribute('class','machine-line-overlay');
+    host.appendChild(ov);
+  }
+  const rect=host.getBoundingClientRect();
+  const w=Math.max(1, Math.round(rect.width));
+  const h=Math.max(1, Math.round(rect.height));
+  ov.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  while(ov.firstChild) ov.removeChild(ov.firstChild);
+  const pts=[];
+  cardIds.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const st=getComputedStyle(el);
+    if(st.display==='none' || st.visibility==='hidden') return;
+    const r=el.getBoundingClientRect();
+    if(r.width<2 || r.height<2) return;
+    pts.push({
+      id,
+      x:(r.left-rect.left)+(r.width/2),
+      y:(r.top-rect.top)+(r.height/2),
+      stepId:Number(String(id).replace(/\D/g,'')) || 0
+    });
+  });
+  if(pts.length===0) return;
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs');
+  defs.innerHTML=`
+    <linearGradient id="${options.overlayId||'machineLineOverlay'}Grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F3F8FB"/>
+      <stop offset="28%" stop-color="#CDD8E0"/>
+      <stop offset="70%" stop-color="#8193A2"/>
+      <stop offset="100%" stop-color="#4A5B6A"/>
+    </linearGradient>`;
+  ov.appendChild(defs);
+  const mk=(tag,at)=>{const e=document.createElementNS(NS,tag);Object.entries(at).forEach(([k,v])=>e.setAttribute(k,String(v)));return e;};
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    ov.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'rgba(0,0,0,0.35)','stroke-width':12,'stroke-linecap':'round'}));
+    ov.appendChild(mk('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:`url(#${options.overlayId||'machineLineOverlay'}Grad)`,'stroke-width':7,'stroke-linecap':'round'}));
+  }
+  pts.forEach(p=>{
+    const st=statusByStep[p.stepId] || 'idle';
+    const col=PIPE_STATUS_COLORS[st] || PIPE_STATUS_COLORS.idle;
+    const r=st==='running'?6.5:4.5;
+    const c=mk('circle',{cx:p.x,cy:p.y,r,fill:col,stroke:'rgba(255,255,255,0.55)','stroke-width':1});
+    if(st==='running') c.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+    if(st==='alarm') c.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+    ov.appendChild(c);
+  });
 }
 function getMachineAssetPair(type){
   const primary = MACHINE_ASSET_BASE + (MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default);
@@ -3476,7 +3545,7 @@ function applyConfigToOperation(){
   applyConfigToWorkerLayout(active);
   const lineModel = buildMachineLineModel(active, stageSlots);
   renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
-  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderMachineLineView('workerMachCol', lineModel.machines, {mode:'operation', view:'worker'});
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
   restoreSimulationVisualState();
 }
@@ -6963,24 +7032,7 @@ function ensureMachPipeLayer(svg){
 }
 
 function buildWorkerStraightPipe(svg, gId, startX){
-  const old=svg.getElementById ? svg.getElementById(gId) : svg.querySelector('#'+gId);
-  if(old) old.remove();
-  ensureWorkerPipeDefs(svg);
-  const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id=gId;
-  const y=CONV_Y, h=CONV_H, L=PIPE_LEN, r=h/2;
-  function mk(tag,at){const el=document.createElementNS(NS,tag);Object.entries(at).forEach(([k,v])=>el.setAttribute(k,v));return el;}
-  g.appendChild(mk('rect',{x:'2',y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#wmpSh)'}));
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#wmpGrad)'}));
-  g.appendChild(mk('rect',{x:'5',y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
-  g.appendChild(mk('rect',{x:'7',y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
-  for(let i=26;i<L-26;i+=22) g.appendChild(mk('rect',{x:String(i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
-  g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  g.setAttribute('transform',`translate(${startX},0)`);
-  const layer = ensureMachPipeLayer(svg);
-  layer.appendChild(g);
-  return g;
+  return null; // Phase4: 머신 내부 개별 배관 렌더 비활성화
 }
 
 function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
@@ -6990,22 +7042,7 @@ function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
 }
 
 function renderMachinePipeStatusDot(svg, dotId, x, status){
-  const layer = ensureMachPipeLayer(svg);
-  const old = layer.querySelector('#'+dotId);
-  if(old) old.remove();
-  const NS='http://www.w3.org/2000/svg';
-  const dot=document.createElementNS(NS,'circle');
-  dot.id = dotId;
-  dot.setAttribute('cx', String(x + (PIPE_LEN/2)));
-  dot.setAttribute('cy', String(CONV_Y + CONV_H/2));
-  dot.setAttribute('r', status==='running' ? '7' : '5');
-  const col = PIPE_STATUS_COLORS[status] || PIPE_STATUS_COLORS.idle;
-  dot.setAttribute('fill', col);
-  dot.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-  dot.setAttribute('stroke-width', '1');
-  if(status==='running') dot.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
-  if(status==='alarm') dot.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
-  layer.appendChild(dot);
+  return; // Phase4: 머신 내부 개별 점 렌더 비활성화
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -7019,7 +7056,7 @@ function updateWorkerMachines(step, slots=null){
   const activeSet=new Set(getActiveSteps());
   const lineModel = buildMachineLineModel([...activeSet], slots);
   renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
-  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderMachineLineView('workerMachCol', lineModel.machines, {mode:'operation', view:'worker'});
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
@@ -7029,7 +7066,11 @@ function updateWorkerMachines(step, slots=null){
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
-    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,activeStageStep,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
+    if(activeStageStep !== i){
+      svg.querySelector('#wPipe'+i)?.remove();
+      svg.querySelector('#wBend'+i)?.remove();
+      svg.querySelector('#wPipe'+i+'Dot')?.remove();
+    }
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
@@ -7041,57 +7082,17 @@ function updateWorkerMachines(step, slots=null){
     svg.dataset.machineActive = activeFlag;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
-    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
+    if(activeStageStep !== i){
+      svg.querySelector('#oPipe'+i)?.remove();
+      svg.querySelector('#oBend'+i)?.remove();
+      svg.querySelector('#oPipe'+i+'Dot')?.remove();
+    }
   });
 }
 
 // ── 내부 헬퍼: 특정 머신 SVG에 파이프 애니메이션 적용 ──
 function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null, activeSet=null){
-  const st = _machPipeAnimState[pipeId] || {active:false, pipeIdx:null};
-  _machPipeAnimState[pipeId] = st;
-  const isConfigured = activeSet ? activeSet.has(machIdx) : true;
-
-  if(activeStep !== machIdx){
-    if(st.active){
-      const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
-      const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
-      const oldD=svg.querySelector('#'+pipeId+'Dot'); if(oldD) oldD.remove();
-      st.active=false; st.pipeIdx=null;
-    }
-    if(!isConfigured){
-      const ghost=svg.querySelector('#'+pipeId); if(ghost) ghost.remove();
-      const ghostB=svg.querySelector('#'+bendId); if(ghostB) ghostB.remove();
-      const ghostD=svg.querySelector('#'+pipeId+'Dot'); if(ghostD) ghostD.remove();
-      return;
-    }
-    const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
-    const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
-    buildWorkerStraightPipe(svg, pipeId, dwellX);
-    renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'idle');
-    return;
-  }
-
-  const visualPipeIdx = stagePipeIdx!=null ? stagePipeIdx : opPipeIdx;
-  if(st.active && st.pipeIdx === visualPipeIdx){
-    const liveP=svg.querySelector('#'+pipeId);
-    const liveB=svg.querySelector('#'+bendId);
-    if(liveP || liveB){
-      return; // 같은 배관이 같은 머신에 머무는 동안 애니메이션 재시작 금지
-    }
-    st.active=false;
-  }
-
-  // 기존 엘리먼트 제거
-  const oldP=svg.querySelector('#'+pipeId); if(oldP) oldP.remove();
-  const oldB=svg.querySelector('#'+bendId); if(oldB) oldB.remove();
-
-  st.active=true;
-  st.pipeIdx=visualPipeIdx;
-
-  const vbLeft = {1:1150, 6:1150, 2:780, 3:410, 4:10, 5:780}[machIdx] || 0;
-  const dwellX = PIPE_DWELL[machIdx] || vbLeft + 30;
-  buildWorkerStraightPipe(svg, pipeId, dwellX);
-  renderMachinePipeStatusDot(svg, pipeId+'Dot', dwellX, 'running');
+  return; // Phase4: 머신 내부 배관 애니메이션 완전 비활성화
 }
 
 // ── 내부 헬퍼: 밴딩 shape 경로 애니메이션 (벤딩ID 외부 지정) ──

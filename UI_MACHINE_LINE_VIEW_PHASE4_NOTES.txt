@@ -1,0 +1,61 @@
+[UI_MACHINE_LINE_VIEW_PHASE4_NOTES]
+
+1) 머신별 내부 배관 로직 제거/비활성화
+- updateWorkerMachines(...)에서 머신별 내부 배관 애니메이션 호출 제거
+  - _animMachPipe(...) 호출 제거
+- 잔여 함수는 호환 목적으로 no-op 처리
+  - buildWorkerStraightPipe(...) => return null
+  - renderMachinePipeStatusDot(...) => return
+  - _animMachPipe(...) => return
+- 결과: wPipe/oPipe 기반 개별 배관이 머신 카드 내부에 생성되지 않음
+
+2) 전체 고정 배관 라인 구현 방식
+- MachineLineView 공통 함수(renderMachineLineView)를 기준으로 동작
+- Operation/Worker는 카드 컨테이너 상위에 단일 오버레이 SVG를 생성
+  - renderMachineLineOverlayByCards(containerId, cardIds, statusByStep, ...)
+  - 컨테이너: opMachGrid, workerMachCol
+  - 오버레이: machine-line-overlay (pointer-events:none)
+- 카드 중심 좌표를 계산하여 머신 간 구간을 은색/메탈릭 라인으로 1회 렌더
+- 상태 점(러닝/대기/알람/완료)은 오버레이에서만 렌더
+  - running: 녹색 glow
+  - idle: 회색
+  - alarm: 빨강
+  - done: 청록
+
+3) 이미지 asset 경로 및 fallback 처리
+- 경로 매핑 유지
+  - wwwroot/assets/machines/machine-loader.webp
+  - wwwroot/assets/machines/machine-cutting.webp
+  - wwwroot/assets/machines/machine-marking.webp
+  - wwwroot/assets/machines/machine-robot.webp
+  - wwwroot/assets/machines/machine-bending-1.webp
+  - wwwroot/assets/machines/machine-bending-2.webp
+  - wwwroot/assets/machines/machine-default.webp
+- fallback 구조 유지
+  - primary img 실패(onerror) -> display:none
+  - default asset 레이어 노출
+  - default도 없으면 inline placeholder 레이어 표시
+- 실제 이미지 파일은 본 작업에서 생성하지 않음(요구사항 준수)
+
+4) 남아 있는 pipe 관련 함수/키워드와 이유
+- _animMachPipe: 남아 있음 (호환 목적 no-op)
+- buildWorkerStraightPipe: 남아 있음 (호환 목적 no-op)
+- renderMachinePipeStatusDot: 남아 있음 (호환 목적 no-op)
+- movePipeTo / moveDashPipeTo: 남아 있음 (레거시 호출 호환용 no-op)
+- movingPipe / dashMovingPipe: 삭제 로직 및 레거시 참조만 존재, 실제 이동 렌더링 없음
+- wPipe / oPipe: 제거용 querySelector 키워드로만 존재(잔존 엘리먼트 정리 목적)
+
+5) 키워드 검색 결과 정리(wwwroot/index.html 기준)
+- _animMachPipe: 함수 정의만 존재, 실제 화면 렌더 호출 없음
+- buildWorkerStraightPipe: 함수 정의만 존재(no-op)
+- renderMachinePipeStatusDot: 함수 정의만 존재(no-op)
+- movingPipe: remove 구문/레거시 참조만 존재
+- dashMovingPipe: remove 구문/레거시 참조만 존재
+- movePipeTo: no-op 함수로 존재
+- moveDashPipeTo: no-op 함수로 존재
+- wPipe / oPipe: 잔존 엘리먼트 제거 querySelector에서만 존재
+
+6) 요약
+- 머신 카드 내부 개별 배관 렌더 경로를 제거/비활성화함
+- 배관은 MachineLineView 상위 오버레이에서 라인 전체 1회 렌더로 통일함
+- 기존 레이아웃(좌측 메뉴, KPI, 프로젝트 리스트, 차트, 우측 패널, Start/Pause/Stop)은 유지함

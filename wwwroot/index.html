@@ -375,10 +375,7 @@ body{transition:background .28s ease,color .28s ease}
 .mc-theme-card.laser{background:var(--laser-bg);border-left:3px solid var(--orange)}
 .mc-theme-card.bending{background:var(--bending-bg);border-left:3px solid var(--purple)}
 .worker-mach{border:1px solid var(--border);box-shadow:var(--shadow-soft)}
-.worker-mach.loader{background:var(--loader-bg)}
-.worker-mach.cutting{background:var(--cutting-bg)}
-.worker-mach.laser{background:var(--laser-bg)}
-.worker-mach.bending{background:var(--bending-bg)}
+.worker-mach.loader,.worker-mach.cutting,.worker-mach.laser,.worker-mach.bending{background:transparent}
 .bend-layout-single{flex:1 !important;min-height:0 !important}
 .bend-layout-dual{
   flex:var(--bend-dual-flex,0.8) !important;
@@ -745,8 +742,8 @@ body::before{
   margin-top:0;
   border:1px solid var(--border);
   border-radius:10px;
-  background:linear-gradient(155deg,var(--hero-a),var(--hero-b));
-  box-shadow:var(--shadow-soft);
+  background:transparent;
+  box-shadow:none;
   overflow:hidden;
   position:relative;
 }
@@ -754,9 +751,9 @@ body::before{
   content:"";
   position:absolute;
   inset:0;
-  background:var(--grid-glow);
+  background:transparent;
   pointer-events:none;
-  opacity:.58;
+  opacity:0;
 }
 .worker-line-preset img{
   position:relative;
@@ -1026,27 +1023,27 @@ body::before{
       <div class="op-right" style="display:flex;flex-direction:column;gap:6px;min-height:300px">
         <!-- 머신 가로 한 줄 (설정된 구성에 따라 동적 표시) -->
         <div id="opMachGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;flex-shrink:0;height:130px">
-          <div id="opMachWrap4" style="background:#11202A;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative" data-machine-card="1">
+          <div id="opMachWrap4" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative" data-machine-card="1">
             <svg id="opMach4" viewBox="10 30 330 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#6FB6C9">Auto Loader</div>
           </div>
-          <div id="opMachWrap3" style="background:#0F1B16;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap3" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach3" viewBox="410 30 300 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#6FB58A">Cutting M/C</div>
           </div>
-          <div id="opMachWrap2" style="background:#20170F;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap2" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach2" viewBox="780 30 300 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#C89263">Laser Marking</div>
           </div>
-          <div id="opMachWrap1" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap1" class="op-bend-span-1" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach1" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
             <div id="opBendBadge1" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C</div>
           </div>
-          <div id="opMachWrap6" class="op-bend-span-1" style="background:#181327;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap6" class="op-bend-span-1" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach6" viewBox="1140 20 420 300" style="width:100%;height:100%"></svg>
             <div id="opBendBadge6" style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#877BC6">Bending M/C #2</div>
           </div>
-          <div id="opMachWrap5" style="background:#102235;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap5" style="background:transparent;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
             <svg id="opMach5" viewBox="780 30 300 280" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#63AEC9">Moving Robot</div>
           </div>
@@ -1427,7 +1424,7 @@ body::before{
       </div>
 
       <!-- RIGHT: 머신 세로 배치 -->
-      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden" data-machine-column="1">
+      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:auto" data-machine-column="1">
         <div id="wMach4" class="worker-mach loader" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 330 280" style="width:100%;height:100%"><g id="wm4"></g></svg>
           <div id="wm4badge" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#6FB6C930;color:#6FB6C9;font-weight:700;border:1px solid #6FB6C944">Auto Loader</div>
@@ -1440,7 +1437,7 @@ body::before{
           <svg viewBox="0 0 300 280" style="width:100%;height:100%"><g id="wm2"></g></svg>
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#C8926330;color:#C89263;font-weight:700;border:1px solid #C8926344">Laser Marking</div>
         </div>
-        <div id="wMach5" class="worker-mach" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:#102235;border:1px solid var(--border)">
+        <div id="wMach5" class="worker-mach" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative;background:transparent;border:1px solid var(--border)">
           <svg viewBox="780 30 300 280" style="width:100%;height:100%"><g id="wm5"></g></svg>
           <div style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#63AEC930;color:#63AEC9;font-weight:700;border:1px solid #63AEC944">Moving Robot</div>
         </div>
@@ -2676,7 +2673,7 @@ function getLinePresetKeyFromMachines(machines){
   return (Array.isArray(machines)?machines:[]).map(m=>m.stepId).join('-');
 }
 function getLinePresetImageForMachines(machines){
-  return LINE_PRESET_IMAGE_MAP[getLinePresetKeyFromMachines(machines)] || null;
+  return null;
 }
 function renderWorkerLinePreset(machines){
   const wrap=document.getElementById('workerLinePresetWrap');
@@ -2694,33 +2691,9 @@ function clearLinePresetImage(svg){
   svg.querySelectorAll('.ap,.ah').forEach(el=>{el.style.display='none';});
 }
 function renderLinePresetImage(svg, imageSrc){
-  if(!svg || !imageSrc) return;
-  clearLinePresetImage(svg);
-  ['mach1','mach2','mach3','mach4','mach5','mach6','flowConveyorLine','ptg'].forEach(id=>{
-    const el=svg.querySelector('#'+id);
-    if(el) el.style.display='none';
-  });
-  svg.querySelectorAll('.ap,.ah').forEach(el=>{el.style.display='none';});
-  const NS='http://www.w3.org/2000/svg';
-  const cover=document.createElementNS(NS,'rect');
-  cover.setAttribute('data-line-preset-cover','1');
-  cover.setAttribute('x','0'); cover.setAttribute('y','0');
-  cover.setAttribute('width','1560'); cover.setAttribute('height','380');
-  cover.setAttribute('fill','#071522');
-  cover.setAttribute('opacity','0.98');
-  const g=document.createElementNS(NS,'g');
-  g.setAttribute('data-line-preset-image','1');
-  const img=document.createElementNS(NS,'image');
-  img.setAttribute('href', imageSrc);
-  img.setAttribute('x','10');
-  img.setAttribute('y','22');
-  img.setAttribute('width','1540');
-  img.setAttribute('height','336');
-  img.setAttribute('preserveAspectRatio','xMidYMid meet');
-  g.appendChild(img);
-  svg.appendChild(cover);
-  svg.appendChild(g);
+  return;
 }
+
 
 function buildMachineLineModel(activeSteps, slots=null){
   const steps = Array.isArray(activeSteps) ? activeSteps.slice() : [];
@@ -2763,11 +2736,6 @@ function renderMachineLineView(containerId, machines, options={}){
   machines.forEach(m=>{ statusMap[m.stepId] = m.status; });
   if(options.view==='flow'){
     const svg=document.getElementById(containerId);
-    const presetImage = getLinePresetImageForMachines(machines);
-    if(svg && presetImage){
-      renderLinePresetImage(svg, presetImage);
-      return;
-    }
     if(svg) clearLinePresetImage(svg);
     [1,2,3,4,5,6].forEach(stepId=>{
       const el=document.getElementById('mach'+stepId); if(!el) return;
@@ -2821,7 +2789,7 @@ function buildMachineAssetSvg(stepId, active=false, mode='dashboard', state='idl
   if(!p) return '';
   const as = getMachineAssetPair(p.type);
   const stCol = state==='alarm' ? '#D96E7B' : state==='offline' ? '#7F8894' : (active ? '#48D597' : p.col);
-  const stOpacity = state==='offline' ? 0.38 : 1;
+  const stOpacity = 1;
   const border = `<rect x="${p.x+2}" y="${p.y+2}" width="${p.w-4}" height="${p.h-4}" rx="14" fill="none" stroke="${stCol}" stroke-width="${active?3:1.4}" opacity="${active?0.95:0.28}"/>`;
   const badge = active ? mkGlow(p.x+6,p.y+6,p.w-12,p.h-12,14,'#48D597') : '';
   return `
@@ -2830,7 +2798,7 @@ function buildMachineAssetSvg(stepId, active=false, mode='dashboard', state='idl
       <foreignObject x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}">
         <div xmlns="http://www.w3.org/1999/xhtml" class="machine-visual-group">
           <div class="machine-image-wrap">
-            <img class="machine-asset" src="${as.primary}" alt="${p.label} 설비 이미지" onerror="this.style.display='none';" />
+            <img class="machine-asset" src="${as.primary}" alt="${p.label} 설비 이미지" onerror="this.onerror=null;this.src='./assets/machines/machine-default.png';" />
           </div>
           <div class="machine-label" style="color:${stCol}">${p.label}</div>
         </div>
@@ -6533,11 +6501,15 @@ let selectedConfig='CFG_CUSTOM';
 
 function normalizeSelectedMachines(rawMachines, fallback=DEFAULT_MACHINE_SET){
   const src = Array.isArray(rawMachines) ? rawMachines : [];
-  const normalized = MACHINE_ORDER.filter(id=>src.includes(id));
-  if(!normalized.includes(1)) normalized.push(1);
-  const uniq = MACHINE_ORDER.filter(id=>normalized.includes(id));
+  const uniq = [];
+  src.forEach(id=>{
+    if(!MACHINE_ORDER.includes(id)) return;
+    if(uniq.includes(id)) return;
+    uniq.push(id);
+  });
+  if(!uniq.includes(1)) uniq.push(1);
   if(!uniq.length){
-    return MACHINE_ORDER.filter(id=>fallback.includes(id));
+    return Array.isArray(fallback) ? fallback.filter((id, idx, arr)=>MACHINE_ORDER.includes(id) && arr.indexOf(id)===idx) : [1];
   }
   return uniq;
 }
@@ -6992,24 +6964,7 @@ function ensureMachPipeLayer(svg){
 }
 
 function buildWorkerStraightPipe(svg, gId, startX){
-  const old=svg.getElementById ? svg.getElementById(gId) : svg.querySelector('#'+gId);
-  if(old) old.remove();
-  ensureWorkerPipeDefs(svg);
-  const NS='http://www.w3.org/2000/svg';
-  const g=document.createElementNS(NS,'g'); g.id=gId;
-  const y=CONV_Y, h=CONV_H, L=PIPE_LEN, r=h/2;
-  function mk(tag,at){const el=document.createElementNS(NS,tag);Object.entries(at).forEach(([k,v])=>el.setAttribute(k,v));return el;}
-  g.appendChild(mk('rect',{x:'2',y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#wmpSh)'}));
-  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#wmpGrad)'}));
-  g.appendChild(mk('rect',{x:'5',y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
-  g.appendChild(mk('rect',{x:'7',y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
-  for(let i=26;i<L-26;i+=22) g.appendChild(mk('rect',{x:String(i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
-  g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
-  g.setAttribute('transform',`translate(${startX},0)`);
-  const layer = ensureMachPipeLayer(svg);
-  layer.appendChild(g);
-  return g;
+  return null;
 }
 
 function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
@@ -7019,22 +6974,7 @@ function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
 }
 
 function renderMachinePipeStatusDot(svg, dotId, x, status){
-  const layer = ensureMachPipeLayer(svg);
-  const old = layer.querySelector('#'+dotId);
-  if(old) old.remove();
-  const NS='http://www.w3.org/2000/svg';
-  const dot=document.createElementNS(NS,'circle');
-  dot.id = dotId;
-  dot.setAttribute('cx', String(x + (PIPE_LEN/2)));
-  dot.setAttribute('cy', String(CONV_Y + CONV_H/2));
-  dot.setAttribute('r', status==='running' ? '7' : '5');
-  const col = PIPE_STATUS_COLORS[status] || PIPE_STATUS_COLORS.idle;
-  dot.setAttribute('fill', col);
-  dot.setAttribute('stroke', 'rgba(255,255,255,0.5)');
-  dot.setAttribute('stroke-width', '1');
-  if(status==='running') dot.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
-  if(status==='alarm') dot.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
-  layer.appendChild(dot);
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════

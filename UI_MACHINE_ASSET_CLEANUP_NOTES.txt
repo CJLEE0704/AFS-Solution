@@ -1,0 +1,57 @@
+[UI 머신 이미지 구조 정리 노트]
+작성일: 2026-04-28
+대상: wwwroot/index.html
+
+1) 수정한 렌더링 함수 목록
+- buildMachineAssetSvg(stepId, active, mode, state)
+  - 이미지 onerror 시 machine-default.png로 대체
+  - 머신 그룹 opacity dim 제거(항상 1)
+- renderMachineLineView(containerId, machines, options)
+  - flow 렌더에서 line preset 분기 제거(항상 머신별 이미지 렌더)
+- getLinePresetImageForMachines(machines)
+  - 항상 null 반환하도록 고정
+- renderLinePresetImage(svg, imageSrc)
+  - no-op 처리
+- buildWorkerStraightPipe(svg, gId, startX)
+  - no-op 처리
+- renderMachinePipeStatusDot(svg, dotId, x, status)
+  - no-op 처리
+- normalizeSelectedMachines(rawMachines, fallback)
+  - 고정 순서 정규화 대신 선택 순서 유지 방식으로 변경
+
+2) 제거/비활성화한 SVG placeholder / pipe 관련 로직
+- 통이미지 preset 적용 경로 비활성화
+  - getLinePresetImageForMachines() => null
+  - renderLinePresetImage() => return
+- Worker 개별 카드 pipe 잔재 렌더 함수 no-op
+  - buildWorkerStraightPipe()
+  - renderMachinePipeStatusDot()
+- 기존 fixed pipe/dot 계열은 기존 no-op 상태 유지
+  - renderFixedMachinePipeLine()
+  - renderMachineStatusDots()
+  - _animMachPipe()
+
+3) Admin / Worker / Operation 적용 방식
+- 공통 MACHINE_ASSET_MAP + buildMachineAssetSvg 기반으로 통일
+- Admin(flow), Worker, Operation 모두 동일한 MSVG 렌더 경로 사용
+- Operation 카드 배경(진한 색) 제거: opMachWrap1~6 background 투명화
+- Worker 카드 배경(기계별 진한 색) 제거: .worker-mach.* 배경 투명화
+- Worker 머신 컬럼 overflow를 auto로 조정해 세로 공간 부족 시 스크롤 우선
+
+4) Setting 선택 반영 방식
+- 선택 머신 정규화 로직을 선택 순서 유지로 변경
+- _doSelectConfig()에서 applyConfigToDashboard/applyConfigToOperation/applyConfigToComm 호출로 반영
+- getActiveConfig().machines 순서가 곧 Admin/Worker/Operation 렌더 순서가 되도록 유지
+
+5) 검증 결과
+- 키워드 점검
+  - 미검출: machine-asset-fallback, MACHINE_INLINE_PLACEHOLDER, production-line-full-6.png
+  - 잔존(호환/no-op 포함): renderFixedMachinePipeLine, renderMachineStatusDots, _animMachPipe, buildWorkerStraightPipe, renderMachinePipeStatusDot, dashMovingPipe, movingPipe, workerLinePresetWrap, LINE_PRESET_IMAGE_MAP
+- 정적 확인
+  - 머신 이미지 fallback: onerror -> machine-default.png 대체 확인
+  - Operation/Worker 어두운 카드 배경 제거 확인
+  - line preset 분기 비활성화 확인
+
+6) 남은 이슈
+- dashMovingPipe/movingPipe 관련 식별자 제거는 이번 변경에서 완전 삭제하지 않음(호환성 유지 목적)
+- 실제 런타임(브라우저)에서 시각 검증 및 콘솔 에러 무발생 여부는 추가 실행 점검 권장

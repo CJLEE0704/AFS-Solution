@@ -200,10 +200,10 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover{
 .flow-row{display:grid;grid-template-columns:2fr 1fr;gap:5px;flex-shrink:0;height:280px}
 .flow-inner{background:linear-gradient(155deg,var(--hero-a),var(--hero-b));border-radius:10px;border:1px solid var(--border);position:relative;overflow:hidden;box-shadow:var(--shadow-soft)}
 .flow-svg{width:100%;height:100%}
-.machine-line-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
-.machine-asset-box{position:relative;width:100%;height:100%;overflow:hidden}
-.machine-asset{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;image-rendering:auto}
-.machine-asset-fallback{opacity:.92}
+.machine-visual-group{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;padding:8px 10px 10px;box-sizing:border-box;background:transparent}
+.machine-image-wrap{width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.machine-asset{display:block;max-width:100%;max-height:100%;object-fit:contain;filter:none !important;mix-blend-mode:normal;image-rendering:auto}
+.machine-label{flex:0 0 auto;font-size:14px;font-weight:800;line-height:1.15;letter-spacing:.2px;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.35)}
 .step-badge{position:absolute;bottom:6px;right:6px;background:rgba(8,16,30,.96);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;display:flex;align-items:center;gap:6px}
 .step-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
 .step-lbl{font-size:15px;font-weight:700;color:var(--bright)}
@@ -737,6 +737,43 @@ body::before{
 :root[data-role='worker'] #opMachGrid{gap:6px;height:140px}
 :root[data-role='worker'] .worker-mach,:root[data-role='worker'] .mc-theme-card{border-radius:16px !important}
 :root[data-role='worker'] .pipe-scr .pc{padding:8px 10px}
+/* Worker line preset image panel (Phase Worker Preset) */
+.worker-line-preset{
+  flex-shrink:0;
+  height:150px;
+  min-height:120px;
+  margin-top:0;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:linear-gradient(155deg,var(--hero-a),var(--hero-b));
+  box-shadow:var(--shadow-soft);
+  overflow:hidden;
+  position:relative;
+}
+.worker-line-preset::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:var(--grid-glow);
+  pointer-events:none;
+  opacity:.58;
+}
+.worker-line-preset img{
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  display:block;
+}
+@media (max-height:860px){
+  .worker-line-preset{height:125px;min-height:110px}
+}
+@media (max-height:760px){
+  .worker-line-preset{height:104px;min-height:96px}
+}
+
 :root[data-theme='light'] .logo::after{box-shadow:0 8px 18px rgba(62,126,167,.10)}
 :root[data-theme='light'] .lcard::before,:root[data-theme='light'] .hdr::before,:root[data-theme='light'] .panel::before,:root[data-theme='light'] .kpi::before,:root[data-theme='light'] .weekly-panel::before,:root[data-theme='light'] .flow-inner::before,:root[data-theme='light'] .pd-hdr::before,:root[data-theme='light'] .op-left::before,:root[data-theme='light'] .op-right::before,:root[data-theme='light'] .theme-pref-card::before,:root[data-theme='light'] .sett-hero::before{background:linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent)}
 
@@ -989,7 +1026,7 @@ body::before{
       <div class="op-right" style="display:flex;flex-direction:column;gap:6px;min-height:300px">
         <!-- 머신 가로 한 줄 (설정된 구성에 따라 동적 표시) -->
         <div id="opMachGrid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;flex-shrink:0;height:130px">
-          <div id="opMachWrap4" style="background:#11202A;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative">
+          <div id="opMachWrap4" style="background:#11202A;border:1px solid var(--border);border-radius:6px;overflow:hidden;position:relative" data-machine-card="1">
             <svg id="opMach4" viewBox="10 30 330 250" style="width:100%;height:100%"></svg>
             <div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:7.5px;font-weight:700;color:#6FB6C9">Auto Loader</div>
           </div>
@@ -1353,6 +1390,11 @@ body::before{
       </div>
     </div>
 
+    <!-- Worker preset line image: shown only when selected machine combination matches a line preset -->
+    <div id="workerLinePresetWrap" class="worker-line-preset" style="display:none">
+      <img id="workerLinePresetImg" src="" alt="생산 라인 구성 이미지" />
+    </div>
+
     <!-- Worker body: LEFT=3D+pipe, RIGHT=machines vertical -->
     <div style="flex:1;display:grid;grid-template-columns:1fr 280px;gap:8px;min-height:0;overflow:hidden">
 
@@ -1385,7 +1427,7 @@ body::before{
       </div>
 
       <!-- RIGHT: 머신 세로 배치 -->
-      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden">
+      <div id="workerMachCol" style="display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden" data-machine-column="1">
         <div id="wMach4" class="worker-mach loader" style="flex:1;min-height:0;border-radius:8px;overflow:hidden;position:relative">
           <svg viewBox="0 0 330 280" style="width:100%;height:100%"><g id="wm4"></g></svg>
           <div id="wm4badge" style="position:absolute;top:4px;right:6px;font-size:8px;padding:2px 7px;border-radius:3px;background:#6FB6C930;color:#6FB6C9;font-weight:700;border:1px solid #6FB6C944">Auto Loader</div>
@@ -2602,17 +2644,16 @@ function mkGlow(x,y,w,h,rx,c){return`<rect x="${x-20}" y="${y-20}" width="${w+40
 function mkScan(x,y,w,h,c){return`<rect x="${x+2}" y="${y+2}" width="${w-4}" height="5" rx="2.5" fill="${c}" opacity="0.7"><animate attributeName="y" values="${y+2};${y+h-7};${y+2}" dur="1.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.7;0.15;0.7" dur="1.2s" repeatCount="indefinite"/></rect>`;}
 function mkBadge(x,y,c){return`<rect x="${x}" y="${y}" width="104" height="26" rx="6" fill="${c}"/><rect x="${x+1}" y="${y+1}" width="102" height="12" rx="5" fill="white" opacity="0.15"/><circle cx="${x+14}" cy="${y+13}" r="6" fill="white"><animate attributeName="opacity" values="1;0;1" dur="0.6s" repeatCount="indefinite"/></circle><text x="${x+27}" y="${y+18}" fill="#040c18" font-size="14" font-weight="900" letter-spacing="0.5">작동중</text>`;}
 
-const MACHINE_INLINE_PLACEHOLDER = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 520'%3E%3Crect width='800' height='520' fill='%2316212d'/%3E%3Crect x='28' y='28' width='744' height='464' rx='28' fill='%23223344' stroke='%23638ca7' stroke-width='4'/%3E%3Ctext x='400' y='265' text-anchor='middle' fill='%23b8d7ea' font-size='48' font-family='Arial' font-weight='700'%3EMACHINE%3C/text%3E%3C/svg%3E";
 const MACHINE_ASSET_BASE = './assets/machines/';
 const MACHINE_ASSET_MAP = {
-  loader: 'machine-loader.webp',
-  cutting: 'machine-cutting.webp',
-  marking: 'machine-marking.webp',
-  robot: 'machine-robot.webp',
-  bending1: 'machine-bending-1.webp',
-  bending2: 'machine-bending-2.webp',
-  bending: 'machine-bending-1.webp',
-  default: 'machine-default.webp'
+  loader: 'machine-loader.png',
+  cutting: 'machine-cutting.png',
+  marking: 'machine-marking.png',
+  robot: 'machine-robot.png',
+  bending1: 'machine-bending-1.png',
+  bending2: 'machine-bending-2.png',
+  bending: 'machine-bending-1.png',
+  default: 'machine-default.png'
 };
 const MACHINE_PROFILE = {
   4:{type:'loader',  x:10,   y:30, w:330, h:280, col:'#69B8D6', label:'Auto Loader', badge:'LOADER'},
@@ -2629,6 +2670,58 @@ const MACHINE_LINE_MODE_PRESET = {
   operation:{msvgMode:'operation', pipeLayer:'fixedPipeLayerOperation', dotLayer:'fixedPipeDotLayerOperation', label:'operation'},
   'settings-preview':{msvgMode:'operation', pipeLayer:'fixedPipeLayerSettingPreview', dotLayer:'fixedPipeDotLayerSettingPreview', label:'settings-preview'},
 };
+
+const LINE_PRESET_IMAGE_MAP = {};
+function getLinePresetKeyFromMachines(machines){
+  return (Array.isArray(machines)?machines:[]).map(m=>m.stepId).join('-');
+}
+function getLinePresetImageForMachines(machines){
+  return LINE_PRESET_IMAGE_MAP[getLinePresetKeyFromMachines(machines)] || null;
+}
+function renderWorkerLinePreset(machines){
+  const wrap=document.getElementById('workerLinePresetWrap');
+  const img=document.getElementById('workerLinePresetImg');
+  if(img) img.removeAttribute('src');
+  if(wrap) wrap.style.display='none';
+}
+function clearLinePresetImage(svg){
+  if(!svg) return;
+  const old=svg.querySelector('g[data-line-preset-image="1"]');
+  if(old) old.remove();
+  const cover=svg.querySelector('rect[data-line-preset-cover="1"]');
+  if(cover) cover.remove();
+  ['flowConveyorLine','ptg'].forEach(id=>{const el=svg.querySelector('#'+id); if(el) el.style.display='none';});
+  svg.querySelectorAll('.ap,.ah').forEach(el=>{el.style.display='none';});
+}
+function renderLinePresetImage(svg, imageSrc){
+  if(!svg || !imageSrc) return;
+  clearLinePresetImage(svg);
+  ['mach1','mach2','mach3','mach4','mach5','mach6','flowConveyorLine','ptg'].forEach(id=>{
+    const el=svg.querySelector('#'+id);
+    if(el) el.style.display='none';
+  });
+  svg.querySelectorAll('.ap,.ah').forEach(el=>{el.style.display='none';});
+  const NS='http://www.w3.org/2000/svg';
+  const cover=document.createElementNS(NS,'rect');
+  cover.setAttribute('data-line-preset-cover','1');
+  cover.setAttribute('x','0'); cover.setAttribute('y','0');
+  cover.setAttribute('width','1560'); cover.setAttribute('height','380');
+  cover.setAttribute('fill','#071522');
+  cover.setAttribute('opacity','0.98');
+  const g=document.createElementNS(NS,'g');
+  g.setAttribute('data-line-preset-image','1');
+  const img=document.createElementNS(NS,'image');
+  img.setAttribute('href', imageSrc);
+  img.setAttribute('x','10');
+  img.setAttribute('y','22');
+  img.setAttribute('width','1540');
+  img.setAttribute('height','336');
+  img.setAttribute('preserveAspectRatio','xMidYMid meet');
+  g.appendChild(img);
+  svg.appendChild(cover);
+  svg.appendChild(g);
+}
+
 function buildMachineLineModel(activeSteps, slots=null){
   const steps = Array.isArray(activeSteps) ? activeSteps.slice() : [];
   const machines = steps.map((stepId, idx)=>{
@@ -2656,13 +2749,26 @@ function buildMachineLineModel(activeSteps, slots=null){
   });
   return {machines, pipeSegments};
 }
+
+function hideLegacyMachineCardLabels(){
+  document.querySelectorAll('#opMachGrid > div > div, #workerMachCol > div > div').forEach(el=>{ el.style.display='none'; });
+}
+
 function renderMachineLineView(containerId, machines, options={}){
+  hideLegacyMachineCardLabels();
   const mode = options.mode || 'admin';
   const preset = MACHINE_LINE_MODE_PRESET[mode] || MACHINE_LINE_MODE_PRESET.admin;
   const steps = machines.map(m=>m.stepId);
   const statusMap = {};
   machines.forEach(m=>{ statusMap[m.stepId] = m.status; });
   if(options.view==='flow'){
+    const svg=document.getElementById(containerId);
+    const presetImage = getLinePresetImageForMachines(machines);
+    if(svg && presetImage){
+      renderLinePresetImage(svg, presetImage);
+      return;
+    }
+    if(svg) clearLinePresetImage(svg);
     [1,2,3,4,5,6].forEach(stepId=>{
       const el=document.getElementById('mach'+stepId); if(!el) return;
       const machine = machines.find(m=>m.stepId===stepId);
@@ -2676,12 +2782,9 @@ function renderMachineLineView(containerId, machines, options={}){
         el.style.display='none';
       }
     });
-    const svg=document.getElementById(containerId);
     if(svg){
-      renderFixedMachinePipeLine(svg, steps, {layerId:preset.pipeLayer});
-      renderMachineStatusDots(svg, steps, {layerId:preset.dotLayer, statusMap});
-      const ptg=document.getElementById('ptg');
-      if(ptg) ptg.style.display='none';
+      ['flowConveyorLine','ptg'].forEach(id=>{const el=svg.querySelector('#'+id); if(el) el.style.display='none';});
+      svg.querySelectorAll('.ap,.ah').forEach(el=>{el.style.display='none';});
     }
     return;
   }
@@ -2698,10 +2801,6 @@ function renderMachineLineView(containerId, machines, options={}){
         }
       }
     });
-    const cardIds = machines.map(m=>'opMachWrap'+m.stepId);
-    const statusByStep = {};
-    machines.forEach(m=>{ statusByStep[m.stepId]=m.status; });
-    renderMachineLineOverlayByCards('opMachGrid', cardIds, statusByStep, {overlayId:'opMachineLineOverlay'});
     return;
   }
   if(options.view==='worker'){
@@ -2711,54 +2810,32 @@ function renderMachineLineView(containerId, machines, options={}){
       const machine = machines.find(m=>m.stepId===stepId);
       if(machine) g.innerHTML=MSVG[stepId](machine.status==='running', preset.msvgMode, machine.status);
     });
-    const cardIds = machines.map(m=>'wMach'+m.stepId);
-    const statusByStep = {};
-    machines.forEach(m=>{ statusByStep[m.stepId]=m.status; });
-    renderMachineLineOverlayByCards('workerMachCol', cardIds, statusByStep, {overlayId:'workerMachineLineOverlay'});
   }
-}
-
-function renderMachineLineOverlayByCards(containerId, cardIds, statusByStep, options={}){
-  const host=document.getElementById(containerId);
-  if(!host) return;
-  host.querySelector('#'+(options.overlayId||'machineLineOverlay'))?.remove();
-  return; // Phase: 장비 사이 배관/점 오버레이 제거
 }
 function getMachineAssetPair(type){
   const primary = MACHINE_ASSET_BASE + (MACHINE_ASSET_MAP[type] || MACHINE_ASSET_MAP.default);
-  const fallback = MACHINE_ASSET_BASE + MACHINE_ASSET_MAP.default;
-  return {primary, fallback, inline: MACHINE_INLINE_PLACEHOLDER};
+  return {primary};
 }
 function buildMachineAssetSvg(stepId, active=false, mode='dashboard', state='idle'){
   const p = MACHINE_PROFILE[stepId];
   if(!p) return '';
   const as = getMachineAssetPair(p.type);
-  const pad = mode==='dashboard' ? 16 : 26;
-  const imgX = p.x + pad;
-  const imgY = p.y + pad + (mode==='dashboard' ? 10 : 16);
-  const imgW = p.w - (pad*2);
-  const imgH = p.h - (pad*2) - (mode==='dashboard' ? 46 : 56);
   const stCol = state==='alarm' ? '#D96E7B' : state==='offline' ? '#7F8894' : (active ? '#48D597' : p.col);
-  const stOpacity = state==='offline' ? 0.35 : 1;
-  const glow = active ? `filter="drop-shadow(0 0 8px #48D597)"` : '';
-  const badge = `<rect x="${p.x+12}" y="${p.y+10}" width="66" height="22" rx="5" fill="#0f1b2a" fill-opacity=".76" stroke="${stCol}" stroke-opacity=".65"/><text x="${p.x+45}" y="${p.y+25}" text-anchor="middle" fill="${stCol}" font-size="12" font-weight="800">${p.badge}</text>`;
-  const label = `<text x="${p.x+p.w/2}" y="${p.y+p.h-14}" text-anchor="middle" fill="${stCol}" font-size="${mode==='dashboard'?24:20}" font-weight="800" opacity="${active?0.95:0.7}">${p.label}</text>`;
-  const imgTag = `
-    <foreignObject x="${imgX}" y="${imgY}" width="${imgW}" height="${imgH}">
-      <div xmlns="http://www.w3.org/1999/xhtml" class="machine-asset-box">
-        <img class="machine-asset machine-asset-fallback" src="${as.inline}" alt="${p.label} 기본 이미지" />
-        <img class="machine-asset machine-asset-fallback" src="${as.fallback}" alt="${p.label} 기본 에셋" />
-        <img class="machine-asset" src="${as.primary}" alt="${p.label} 설비 이미지" onerror="this.style.display='none';" />
-      </div>
-    </foreignObject>`;
+  const stOpacity = state==='offline' ? 0.38 : 1;
+  const border = `<rect x="${p.x+2}" y="${p.y+2}" width="${p.w-4}" height="${p.h-4}" rx="14" fill="none" stroke="${stCol}" stroke-width="${active?3:1.4}" opacity="${active?0.95:0.28}"/>`;
+  const badge = active ? mkGlow(p.x+6,p.y+6,p.w-12,p.h-12,14,'#48D597') : '';
   return `
-    <g data-machine-step="${stepId}" data-machine-state="${state}" opacity="${stOpacity}" ${glow}>
-      <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="10" fill="#0D151F" stroke="${stCol}" stroke-width="${active?3:1.6}" stroke-opacity="${active?1:.5}"/>
-      <rect x="${p.x+2}" y="${p.y+2}" width="${p.w-4}" height="${p.h-4}" rx="9" fill="rgba(19,30,42,0.75)" stroke="rgba(143,170,193,0.2)"/>
-      ${imgTag}
+    <g data-machine-step="${stepId}" data-machine-state="${state}" opacity="${stOpacity}">
+      ${border}
+      <foreignObject x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="machine-visual-group">
+          <div class="machine-image-wrap">
+            <img class="machine-asset" src="${as.primary}" alt="${p.label} 설비 이미지" onerror="this.style.display='none';" />
+          </div>
+          <div class="machine-label" style="color:${stCol}">${p.label}</div>
+        </div>
+      </foreignObject>
       ${badge}
-      ${label}
-      ${active ? mkGlow(p.x,p.y,p.w,p.h,10,'#48D597') : ''}
     </g>`;
 }
 const MSVG={
@@ -3494,7 +3571,8 @@ function applyConfigToOperation(){
   applyConfigToWorkerLayout(active);
   const lineModel = buildMachineLineModel(active, stageSlots);
   renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
-  renderMachineLineView('workerMachCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderWorkerLinePreset(lineModel.machines);
   updateWorkerMachines(processRunning ? currentStep : 0, stageSlots);
   restoreSimulationVisualState();
 }
@@ -3835,16 +3913,18 @@ const PIPE_STATUS_COLORS = {
 
 function renderFixedMachinePipeLine(svg, machines, options={}){
   if(!svg) return null;
-  const layerId = options.layerId || 'fixedPipeLayer';
-  svg.querySelector('#'+layerId)?.remove();
-  return null; // Phase: 모든 배관 시각 요소 제거
+  const layerId = options.layerId || 'renderFixedMachinePipeLine';
+  const layer = svg.querySelector('#'+layerId);
+  if(layer) layer.innerHTML='';
+  return layer || null;
 }
 
 function renderMachineStatusDots(svg, machines, options={}){
   if(!svg) return null;
-  const layerId = options.layerId || 'fixedPipeDotLayer';
-  svg.querySelector('#'+layerId)?.remove();
-  return null; // Phase: 배관 상태 점 제거
+  const layerId = options.layerId || 'renderMachineStatusDots';
+  const layer = svg.querySelector('#'+layerId);
+  if(layer) layer.innerHTML='';
+  return layer || null;
 }
 
 // ── 은색 직선 배관 엘리먼트 생성 (머신 라인 높이로 이동) ──
@@ -6912,7 +6992,24 @@ function ensureMachPipeLayer(svg){
 }
 
 function buildWorkerStraightPipe(svg, gId, startX){
-  return null; // Phase4: 머신 내부 개별 배관 렌더 비활성화
+  const old=svg.getElementById ? svg.getElementById(gId) : svg.querySelector('#'+gId);
+  if(old) old.remove();
+  ensureWorkerPipeDefs(svg);
+  const NS='http://www.w3.org/2000/svg';
+  const g=document.createElementNS(NS,'g'); g.id=gId;
+  const y=CONV_Y, h=CONV_H, L=PIPE_LEN, r=h/2;
+  function mk(tag,at){const el=document.createElementNS(NS,tag);Object.entries(at).forEach(([k,v])=>el.setAttribute(k,v));return el;}
+  g.appendChild(mk('rect',{x:'2',y:String(y+h+2),width:String(L),height:'7',rx:String(r),fill:'rgba(0,0,0,0.4)',filter:'url(#wmpSh)'}));
+  g.appendChild(mk('rect',{x:'0',y:String(y),width:String(L),height:String(h),rx:String(r),fill:'url(#wmpGrad)'}));
+  g.appendChild(mk('rect',{x:'5',y:String(y+2),width:String(L-10),height:String((h*0.3)|0),rx:String(r),fill:'rgba(255,255,255,0.62)'}));
+  g.appendChild(mk('rect',{x:'7',y:String(y+h-4),width:String(L-14),height:'3',rx:'2',fill:'rgba(0,0,0,0.28)'}));
+  for(let i=26;i<L-26;i+=22) g.appendChild(mk('rect',{x:String(i),y:String(y+(h/2-1)|0),width:'10',height:'2',rx:'1',fill:'rgba(255,255,255,0.23)'}));
+  g.appendChild(mk('ellipse',{cx:'3',cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+  g.appendChild(mk('ellipse',{cx:String(L-3),cy:String(y+r),rx:'6',ry:String(r),fill:'#273748',stroke:'#55697F','stroke-width':'1.5'}));
+  g.setAttribute('transform',`translate(${startX},0)`);
+  const layer = ensureMachPipeLayer(svg);
+  layer.appendChild(g);
+  return g;
 }
 
 function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
@@ -6922,7 +7019,22 @@ function animWorkerPipeEntry(g, fromX, toX, dur, flagFn, cb){
 }
 
 function renderMachinePipeStatusDot(svg, dotId, x, status){
-  return; // Phase4: 머신 내부 개별 점 렌더 비활성화
+  const layer = ensureMachPipeLayer(svg);
+  const old = layer.querySelector('#'+dotId);
+  if(old) old.remove();
+  const NS='http://www.w3.org/2000/svg';
+  const dot=document.createElementNS(NS,'circle');
+  dot.id = dotId;
+  dot.setAttribute('cx', String(x + (PIPE_LEN/2)));
+  dot.setAttribute('cy', String(CONV_Y + CONV_H/2));
+  dot.setAttribute('r', status==='running' ? '7' : '5');
+  const col = PIPE_STATUS_COLORS[status] || PIPE_STATUS_COLORS.idle;
+  dot.setAttribute('fill', col);
+  dot.setAttribute('stroke', 'rgba(255,255,255,0.5)');
+  dot.setAttribute('stroke-width', '1');
+  if(status==='running') dot.setAttribute('filter','drop-shadow(0 0 6px #48D597)');
+  if(status==='alarm') dot.setAttribute('filter','drop-shadow(0 0 5px #D96E7B)');
+  layer.appendChild(dot);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -6936,7 +7048,8 @@ function updateWorkerMachines(step, slots=null){
   const activeSet=new Set(getActiveSteps());
   const lineModel = buildMachineLineModel([...activeSet], slots);
   renderMachineLineView('opMachGrid', lineModel.machines, {mode:'operation', view:'operation'});
-  renderMachineLineView('workerMachCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderMachineLineView('workerMachineCol', lineModel.machines, {mode:'operation', view:'worker'});
+  renderWorkerLinePreset(lineModel.machines);
 
   // ── 1. Worker 머신 카드 (wm은 <g> 요소, 부모 <svg>에 배관 추가) ──
   [1,2,3,4,5,6].forEach(i=>{
@@ -6946,11 +7059,7 @@ function updateWorkerMachines(step, slots=null){
     const svg=el.closest('svg'); if(!svg) return;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : ((processRunning||dashAutoRunning) ? -1 : 0);
-    if(activeStageStep !== i){
-      svg.querySelector('#wPipe'+i)?.remove();
-      svg.querySelector('#wBend'+i)?.remove();
-      svg.querySelector('#wPipe'+i+'Dot')?.remove();
-    }
+    _animMachPipe(svg,'wPipe'+i,'wBend'+i,i,activeStageStep,()=>processRunning||dashAutoRunning, stagePipeIdx, activeSet);
   });
 
   // ── 2. Operation 머신 카드 (opMach는 <svg> 직접 — innerHTML 설정 후 배관 추가) ──
@@ -6962,17 +7071,15 @@ function updateWorkerMachines(step, slots=null){
     svg.dataset.machineActive = activeFlag;
     svg.setAttribute('viewBox',W_VBMAP[i]);
     const activeStageStep = stagePipeIdx!=null ? i : (processRunning ? -1 : 0);
-    if(activeStageStep !== i){
-      svg.querySelector('#oPipe'+i)?.remove();
-      svg.querySelector('#oBend'+i)?.remove();
-      svg.querySelector('#oPipe'+i+'Dot')?.remove();
-    }
+    _animMachPipe(svg,'oPipe'+i,'oBend'+i,i,activeStageStep,()=>processRunning, stagePipeIdx, activeSet); // 배관은 그 다음
   });
 }
 
 // ── 내부 헬퍼: 특정 머신 SVG에 파이프 애니메이션 적용 ──
 function _animMachPipe(svg, pipeId, bendId, machIdx, activeStep, flagFn, stagePipeIdx=null, activeSet=null){
-  return; // Phase4: 머신 내부 배관 애니메이션 완전 비활성화
+  if(!svg) return;
+  [pipeId,bendId,pipeId+'Dot'].forEach(id=>{ const el=svg.querySelector('#'+id); if(el) el.remove(); });
+  return;
 }
 
 // ── 내부 헬퍼: 밴딩 shape 경로 애니메이션 (벤딩ID 외부 지정) ──

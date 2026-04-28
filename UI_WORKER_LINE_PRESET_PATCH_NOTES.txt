@@ -1,0 +1,25 @@
+# UI Worker Line Preset Patch Notes
+
+## 목적
+Admin/Dashboard에 적용된 production-line-full-6.png 프리셋 라인 이미지를 Worker 화면에도 표시할 수 있도록 반영했다.
+
+## 변경 내용
+- `wwwroot/index.html`에 Worker 전용 프리셋 이미지 영역 추가: `workerLinePresetWrap`, `workerLinePresetImg`
+- 같은 조합 키(`4-3-2-5-1-6`)일 때 `assets/line/production-line-full-6.png`를 Worker 화면 상단에 표시
+- Worker 화면은 세로 공간이 작으므로 CSS에서 높이를 별도 제어
+  - 기본 높이 150px
+  - 낮은 화면에서는 125px/104px로 축소
+- 기존 Worker 하단 배관 리스트/3D Viewer/우측 머신 상태 컬럼은 유지
+- 설정 조합이 프리셋과 다르면 Worker 프리셋 이미지 영역은 자동 숨김
+
+## 주의
+- 이번 패치는 Worker 화면에 이미지 영역을 추가하는 작업이다.
+- 실제 머신별 개별 asset 분리 작업은 포함하지 않았다.
+- Start/Pause/Stop, 알람, 작업 리스트, 3D Viewer 구조는 변경하지 않았다.
+
+## 수동 확인 방법
+1. Worker 권한으로 로그인한다.
+2. 설정 조합이 Full line(4-3-2-5-1-6)인지 확인한다.
+3. Worker 화면 헤더 아래에 생산 라인 이미지가 보이는지 확인한다.
+4. 화면 높이가 작은 PC에서 이미지가 잘리지 않고 축소되는지 확인한다.
+5. 다른 머신 조합으로 변경 시 Worker 이미지 영역이 숨겨지는지 확인한다.

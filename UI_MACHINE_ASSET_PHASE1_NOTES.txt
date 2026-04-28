@@ -1,0 +1,19 @@
+UI_MACHINE_ASSET_PHASE1_NOTES
+=============================
+
+기준 소스: AFS-Solution_0.2.zip
+
+이번 1차 작업 내용
+- 머신 이미지 asset를 PNG로 교체
+- asset 경로: wwwroot/assets/machines/
+- 기존 webp/fallback placeholder 구조 제거
+- 머신 이미지 렌더를 foreignObject 기반 '이미지 + 라벨' 그룹으로 단순화
+- 이미지 중심/라벨 포함 세로 중앙 정렬 적용
+- flow/admin 영역의 고정 배관 표시 비활성화
+- operation/worker의 기존 overlay 라벨은 숨김 처리
+- line preset 통이미지 비활성화
+- worker preset 이미지 영역 비활성화
+
+추가 메모
+- 배경은 생성 이미지의 밝은 체크 배경을 제거하여 투명 PNG로 저장함
+- 2차 작업에서 worker 세로 위치 / 더 세밀한 레이아웃 조정 진행 권장

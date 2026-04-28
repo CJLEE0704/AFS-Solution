@@ -1,0 +1,28 @@
+# UI_LINE_PRESET_COMBO_PATCH_NOTES
+
+## 목적
+설정에서 선택된 머신 조합이 대표 6장비 라인 구성과 일치할 경우, 중앙 라인 영역에 고품질 통이미지 프리셋을 표시하도록 수정했다.
+
+## 추가 asset
+- wwwroot/assets/line/production-line-full-6.png
+
+## 적용 조건
+현재 선택 머신 step 순서가 아래와 정확히 일치하면 프리셋 이미지를 표시한다.
+- 4-3-2-5-1-6
+- Auto Loader → Cutting M/C → Laser Marking → Moving Robot → Bending M/C #1 → Bending M/C #2
+
+## fallback
+설정 조합이 프리셋과 다르면 기존 동적 MachineLineView 렌더링으로 fallback한다.
+
+## 수정 파일
+- wwwroot/index.html
+
+## 추가 함수
+- getLinePresetKeyFromMachines(machines)
+- getLinePresetImageForMachines(machines)
+- renderLinePresetImage(svg, imageSrc)
+- clearLinePresetImage(svg)
+
+## 주의
+통이미지 방식은 설정 조합과 이미지 구성이 정확히 맞을 때만 사용해야 한다.
+다른 조합에서는 동적 라인뷰로 fallback한다.
